@@ -37,6 +37,7 @@ func TestHandshake(t *testing.T) {
 	prologue := []byte("/noise/0.0.0")
 
 	// initiator setup
+	init_pub := kp_init.PubKey()
 	libp2p_priv_init, libp2p_pub_init, err := crypto.GenerateEd25519Key(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
@@ -45,12 +46,13 @@ func TestHandshake(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	libp2p_init_signed_payload, err := libp2p_priv_init.Sign(payload_string)
+	libp2p_init_signed_payload, err := libp2p_priv_init.Sign(append(payload_string, init_pub[:]...))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// respoonder setup
+	resp_pub := kp_resp.PubKey()
 	libp2p_priv_resp, libp2p_pub_resp, err := crypto.GenerateEd25519Key(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
@@ -59,7 +61,7 @@ func TestHandshake(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	libp2p_resp_signed_payload, err := libp2p_priv_resp.Sign(payload_string)
+	libp2p_resp_signed_payload, err := libp2p_priv_resp.Sign(append(payload_string, resp_pub[:]...))
 	if err != nil {
 		t.Fatal(err)
 	}
