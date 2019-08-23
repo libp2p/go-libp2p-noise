@@ -19,7 +19,7 @@ import (
 	"crypto/subtle"
 
 	"encoding/binary"
-	//"golang.org/x/crypto/blake2s"
+	"errors"
 	"golang.org/x/crypto/chacha20poly1305"
 	"golang.org/x/crypto/curve25519"
 	"golang.org/x/crypto/hkdf"
@@ -124,6 +124,18 @@ func isEmptyKey(k [32]byte) bool {
 	return subtle.ConstantTimeCompare(k[:], emptyKey[:]) == 1
 }
 
+func (mb *MessageBuffer) NE() [32]byte {
+	return mb.ne
+}
+
+func (mb *MessageBuffer) NS() []byte {
+	return mb.ns
+}
+
+func (mb *MessageBuffer) Ciphertext() []byte {
+	return mb.ciphertext
+}
+
 func (mb *MessageBuffer) Encode0() []byte {
 	enc := []byte{}
 
@@ -137,10 +149,48 @@ func (mb *MessageBuffer) Encode1() []byte {
 	enc := []byte{}
 
 	enc = append(enc, mb.ne[:]...)
+	enc = append(enc, mb.ns[:]...)
 	enc = append(enc, mb.ciphertext...)
 
 	return enc
 }
+
+func (mb *MessageBuffer) Encode2() []byte {
+	enc := []byte{}
+
+	enc = append(enc, mb.ns[:]...)
+	enc = append(enc, mb.ciphertext...)
+
+	return enc
+}
+
+// Decodes initial message into MessageBuffer
+func Decode0(in []byte) (*MessageBuffer, error) {
+	if len(in) < 32 {
+		return nil, errors.New("cannot decode stage 0 MessageBuffer: length less than 32 bytes")
+	}
+
+	mb := new(MessageBuffer)
+	copy(mb.ne[:], in[:32])
+	copy(mb.ciphertext, in[32:])
+
+	return mb, nil
+}
+
+// Decodes messages at stage 1 or 2 into MessageBuffer
+func Decode1(in []byte) (*MessageBuffer, error) {
+	if len(in) < 80 {
+		return nil, errors.New("cannot decode stage 1/2 MessageBuffer: length less than 96 bytes")
+	}
+
+	mb := new(MessageBuffer)
+	copy(mb.ne[:], in[:32])
+	copy(mb.ns, in[32:80])
+	copy(mb.ciphertext, in[80:])
+
+	return mb, nil
+}
+
 
 func validatePublicKey(k []byte) bool {
 	forbiddenCurveValues := [12][]byte{

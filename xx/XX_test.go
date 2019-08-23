@@ -89,6 +89,7 @@ func TestHandshake(t *testing.T) {
 	ns_init, msgbuf = SendMessage(ns_init, msg)
 
 	t.Logf("stage 0 msgbuf: %v", msgbuf)
+	t.Logf("stage 0 msgbuf ne len: %d", len(msgbuf.NE()))
 
 	// stage 0: responder
 	var plaintext []byte
@@ -103,9 +104,8 @@ func TestHandshake(t *testing.T) {
 	// stage 1: responder
 	// create payload
 	payload_resp := new(pb.NoiseHandshakePayload)
-	// TODO: an encrypted payload is sent in the response message
-	payload_init.Libp2PKey = libp2p_pub_resp_raw
-	payload_init.NoiseStaticKeySignature = libp2p_resp_signed_payload
+	payload_resp.Libp2PKey = libp2p_pub_resp_raw
+	payload_resp.NoiseStaticKeySignature = libp2p_resp_signed_payload
 	payload_resp_enc, err := proto.Marshal(payload_resp)
 	if err != nil {
 		t.Fatalf("proto marshal payload fail: %s", err)
@@ -114,6 +114,8 @@ func TestHandshake(t *testing.T) {
 	ns_resp, msgbuf = SendMessage(ns_resp, msg)
 
 	t.Logf("stage 1 msgbuf: %v", msgbuf)
+	t.Logf("stage 1 msgbuf ne len: %d", len(msgbuf.NE()))
+	t.Logf("stage 1 msgbuf ns len: %d", len(msgbuf.NS()))
 
 	// stage 1: initiator
 	ns_init, plaintext, valid = RecvMessage(ns_init, &msgbuf)
@@ -129,6 +131,8 @@ func TestHandshake(t *testing.T) {
 	ns_init, msgbuf = SendMessage(ns_init, msg)
 
 	t.Logf("stage 2 msgbuf: %v", msgbuf)
+	t.Logf("stage 2 msgbuf ne len: %d", len(msgbuf.NE()))
+	t.Logf("stage 2 msgbuf ns len: %d", len(msgbuf.NS()))
 
 	// stage 2: responder
 	ns_resp, plaintext, valid = RecvMessage(ns_resp, &msgbuf)

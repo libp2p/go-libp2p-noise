@@ -15,6 +15,8 @@ import (
 	xx "github.com/ChainSafe/go-libp2p-noise/xx"
 )
 
+const payload_string = "noise-libp2p-static-key:"
+
 type secureSession struct {
 	insecure net.Conn
 
@@ -48,7 +50,9 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 	// TODO: check if static key for peer exists
 	// if so, do XX; otherwise do IK
 
-	// PHASE 1: TRY XX
+	// ******************************************** //
+	// ************** PHASE 1: TRY XX ************* //
+	// ******************************************** //
 
 	// get remote static key
 	remotePub := [32]byte{}
@@ -61,18 +65,34 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 	// generate local static noise key
 	kp := xx.GenerateKeypair()
 
+	// setup libp2p keys
+	localKeyRaw, err := s.LocalPublicKey().Raw()
+	if err != nil {
+		return fmt.Errorf("err getting raw pubkey: %s", err)
+	}
+	noise_pub := kp.PubKey()
+	signedPayload, err := s.localKey.Sign(append([]byte(payload_string), noise_pub[:]...))
+	if err != nil {
+		return fmt.Errorf("err signing payload: %s", err)
+	}
+
 	// new XX noise session
 	ns := xx.InitSession(s.initiator, s.prologue, kp, remotePub)
 
 	// send initial payload message
 	if s.initiator {
+		// stage 0 //
+
 		// create payload
 		payload := new(pb.NoiseHandshakePayload)
+		payload.Libp2PKey = localKeyRaw
+		payload.NoiseStaticKeySignature = signedPayload
 		msg, err := proto.Marshal(payload)
 		if err != nil {
 			return fmt.Errorf("proto marshal payload fail: %s", err)
 		}
 
+		// create message buffer to send
 		var msgbuf xx.MessageBuffer
 		ns, msgbuf = xx.SendMessage(ns, msg)
 
@@ -81,11 +101,15 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 			return fmt.Errorf("enc msg buf: len does not equal 56")
 		}
 
+		// send message
 		_, err = s.insecure.Write(encMsgBuf)
 		if err != nil {
 			return fmt.Errorf("write to conn fail: %s", err)
 		}
 
+		// stage 1 //
+		
+		// read reply
 		// 	buf := make([]byte, 144)
 		// 	_, err = s.insecure.Read(buf)
 		// 	if err != nil {
@@ -110,6 +134,10 @@ func (s *secureSession) LocalPeer() peer.ID {
 
 func (s *secureSession) LocalPrivateKey() crypto.PrivKey {
 	return s.localKey
+}
+
+func (s *secureSession) LocalPublicKey() crypto.PubKey {
+	return s.localKey.GetPublic()
 }
 
 func (s *secureSession) Read(in []byte) (int, error) {
