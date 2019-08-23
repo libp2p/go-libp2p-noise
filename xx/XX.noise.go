@@ -63,7 +63,7 @@ type handshakestate struct {
 	psk [32]byte
 }
 
-type noisesession struct {
+type NoiseSession struct {
 	hs  handshakestate
 	h   [32]byte
 	cs1 cipherstate
@@ -136,6 +136,7 @@ func (mb *MessageBuffer) Ciphertext() []byte {
 	return mb.ciphertext
 }
 
+// Encodes a MessageBuffer from stage 0
 func (mb *MessageBuffer) Encode0() []byte {
 	enc := []byte{}
 
@@ -145,6 +146,7 @@ func (mb *MessageBuffer) Encode0() []byte {
 	return enc
 }
 
+// Encodes a MessageBuffer from stage 1 and 2
 func (mb *MessageBuffer) Encode1() []byte {
 	enc := []byte{}
 
@@ -155,16 +157,7 @@ func (mb *MessageBuffer) Encode1() []byte {
 	return enc
 }
 
-func (mb *MessageBuffer) Encode2() []byte {
-	enc := []byte{}
-
-	enc = append(enc, mb.ns[:]...)
-	enc = append(enc, mb.ciphertext...)
-
-	return enc
-}
-
-// Decodes initial message into MessageBuffer
+// Decodes initial message (stage 0) into MessageBuffer
 func Decode0(in []byte) (*MessageBuffer, error) {
 	if len(in) < 32 {
 		return nil, errors.New("cannot decode stage 0 MessageBuffer: length less than 32 bytes")
@@ -190,7 +183,6 @@ func Decode1(in []byte) (*MessageBuffer, error) {
 
 	return mb, nil
 }
-
 
 func validatePublicKey(k []byte) bool {
 	forbiddenCurveValues := [12][]byte{
@@ -502,8 +494,8 @@ func readMessageC(hs *handshakestate, message *MessageBuffer) ([32]byte, []byte,
  * PROCESSES                                                        *
  * ---------------------------------------------------------------- */
 
-func InitSession(initiator bool, prologue []byte, s Keypair, rs [32]byte) *noisesession {
-	var session noisesession
+func InitSession(initiator bool, prologue []byte, s Keypair, rs [32]byte) *NoiseSession {
+	var session NoiseSession
 	psk := emptyKey
 	if initiator {
 		session.hs = initializeInitiator(prologue, s, rs, psk)
@@ -515,7 +507,7 @@ func InitSession(initiator bool, prologue []byte, s Keypair, rs [32]byte) *noise
 	return &session
 }
 
-func SendMessage(session *noisesession, message []byte) (*noisesession, MessageBuffer) {
+func SendMessage(session *NoiseSession, message []byte) (*NoiseSession, MessageBuffer) {
 	var messageBuffer MessageBuffer
 	if session.mc == 0 {
 		_, messageBuffer = writeMessageA(&session.hs, message)
@@ -531,7 +523,7 @@ func SendMessage(session *noisesession, message []byte) (*noisesession, MessageB
 	return session, messageBuffer
 }
 
-func RecvMessage(session *noisesession, message *MessageBuffer) (*noisesession, []byte, bool) {
+func RecvMessage(session *NoiseSession, message *MessageBuffer) (*NoiseSession, []byte, bool) {
 	var plaintext []byte
 	var valid bool
 	if session.mc == 0 {

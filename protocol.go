@@ -29,6 +29,8 @@ type secureSession struct {
 
 	local  peerInfo
 	remote peerInfo
+
+	ns *xx.NoiseSession
 }
 
 func newSecureSession(ctx context.Context, local peer.ID, privKey crypto.PrivKey, insecure net.Conn, remote peer.ID, initiator bool) (sec.SecureConn, error) {
@@ -43,6 +45,51 @@ func newSecureSession(ctx context.Context, local peer.ID, privKey crypto.PrivKey
 	}
 
 	return s, nil
+}
+
+func (s *secureSession) sendHandshakeMessage(payload []byte, initial_stage bool) error {
+	// create send message w payload
+	var msgbuf xx.MessageBuffer
+	s.ns, msgbuf = xx.SendMessage(s.ns, payload)
+	var encMsgBuf []byte
+	if initial_stage {
+		encMsgBuf = msgbuf.Encode0()
+	} else {
+		encMsgBuf = msgbuf.Encode1()
+	}
+
+	// send message
+	_, err := s.insecure.Write(encMsgBuf)
+	if err != nil {
+		return fmt.Errorf("write to conn fail: %s", err)
+	}
+
+	return nil
+}
+
+func (s *secureSession) recvHandshakeMessage(buf []byte, initial_stage bool) (plaintext []byte, valid bool, err error) {
+	_, err = s.insecure.Read(buf)
+	if err != nil {
+		return nil, false, fmt.Errorf("read from conn fail: %s", err)
+	}
+
+	var msgbuf *xx.MessageBuffer
+	if initial_stage {
+		msgbuf, err = xx.Decode0(buf)
+	} else {
+		msgbuf, err = xx.Decode1(buf)
+	}
+
+	if err != nil {
+		return nil, false, fmt.Errorf("decode msg fail: %s", err)
+	}
+
+	s.ns, plaintext, valid = xx.RecvMessage(s.ns, msgbuf)
+	if !valid {
+		return nil, false, fmt.Errorf("validation fail")
+	}
+
+	return plaintext, valid, nil
 }
 
 func (s *secureSession) runHandshake(ctx context.Context) error {
@@ -70,55 +117,97 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("err getting raw pubkey: %s", err)
 	}
+
+	// sign noise data for payload
 	noise_pub := kp.PubKey()
 	signedPayload, err := s.localKey.Sign(append([]byte(payload_string), noise_pub[:]...))
 	if err != nil {
 		return fmt.Errorf("err signing payload: %s", err)
 	}
 
-	// new XX noise session
-	ns := xx.InitSession(s.initiator, s.prologue, kp, remotePub)
+	// create payload
+	payload := new(pb.NoiseHandshakePayload)
+	payload.Libp2PKey = localKeyRaw
+	payload.NoiseStaticKeySignature = signedPayload
+	payloadEnc, err := proto.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("proto marshal payload fail: %s", err)
+	}
 
-	// send initial payload message
+	// new XX noise session
+	s.ns = xx.InitSession(s.initiator, s.prologue, kp, remotePub)
+
 	if s.initiator {
 		// stage 0 //
 
-		// create payload
-		payload := new(pb.NoiseHandshakePayload)
-		payload.Libp2PKey = localKeyRaw
-		payload.NoiseStaticKeySignature = signedPayload
-		msg, err := proto.Marshal(payload)
+		err = s.sendHandshakeMessage(payloadEnc, true)
 		if err != nil {
-			return fmt.Errorf("proto marshal payload fail: %s", err)
-		}
-
-		// create message buffer to send
-		var msgbuf xx.MessageBuffer
-		ns, msgbuf = xx.SendMessage(ns, msg)
-
-		encMsgBuf := msgbuf.Encode0()
-		if len(encMsgBuf) != 56 {
-			return fmt.Errorf("enc msg buf: len does not equal 56")
-		}
-
-		// send message
-		_, err = s.insecure.Write(encMsgBuf)
-		if err != nil {
-			return fmt.Errorf("write to conn fail: %s", err)
+			return fmt.Errorf("stage 0 intiator fail: %s", err)
 		}
 
 		// stage 1 //
-		
-		// read reply
-		// 	buf := make([]byte, 144)
-		// 	_, err = s.insecure.Read(buf)
-		// 	if err != nil {
-		// 		return fmt.Errorf("read from conn fail: %s", err)
-		// 	}
 
-		// 	var plaintext []byte
-		// 	var valid bool
-		// 	ns, plaintext, valid = xx.RecvMessage(ns, )
+		// read reply
+		buf := make([]byte, 80+(2*len(payloadEnc)))
+		plaintext, valid, err := s.recvHandshakeMessage(buf, false)
+		if err != nil {
+			return fmt.Errorf("intiator stage 1 fail: %s", err)
+		}
+
+		if !valid {
+			return fmt.Errorf("stage 1 initiator validation fail")
+		}
+
+		// TODO: check payload
+		fmt.Printf("%x", plaintext)
+
+		// stage 2 //
+
+		err = s.sendHandshakeMessage(nil, false)
+		if err != nil {
+			return fmt.Errorf("stage 2 intiator fail: %s", err)
+		}
+
+	} else {
+
+		// stage 0 //
+
+		// read message
+		buf := make([]byte, 32+len(payloadEnc))
+		plaintext, valid, err := s.recvHandshakeMessage(buf, false)
+		if err != nil {
+			return fmt.Errorf("stage 0 responder fail: %s", err)
+		}
+
+		if !valid {
+			return fmt.Errorf("stage 0 responder validation fail")
+		}
+
+		// TODO: check payload
+		fmt.Printf("%x", plaintext)
+
+		// stage 1 //
+
+		err = s.sendHandshakeMessage(payloadEnc, true)
+		if err != nil {
+			return fmt.Errorf("stage 1 responder fail: %s", err)
+		}
+
+		// stage 2 //
+
+		// read message
+		buf = make([]byte, 80+(3*len(payloadEnc)))
+		plaintext, valid, err = s.recvHandshakeMessage(buf, false)
+		if err != nil {
+			return fmt.Errorf("stage 2 responder fail: %s", err)
+		}
+
+		if !valid {
+			return fmt.Errorf("stage 2 responder validation fail")
+		}
+
+		// TODO: check payload
+		fmt.Printf("%x", plaintext)
 	}
 
 	return nil

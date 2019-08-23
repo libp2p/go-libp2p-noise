@@ -11,6 +11,8 @@ import (
 
 const ID = "/noise/0.0.0"
 
+var _ sec.SecureTransport = &Transport{}
+
 type Transport struct {
 	LocalID    peer.ID
 	PrivateKey crypto.PrivKey
