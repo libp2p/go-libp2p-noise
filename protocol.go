@@ -11,7 +11,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/sec"
 	proto "github.com/gogo/protobuf/proto"
 
-	xx "github.com/noot/noise/xx"
+	xx "github.com/ChainSafe/go-libp2p-noise/xx"
 )
 
 type secureSession struct {
@@ -92,7 +92,9 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 			return fmt.Errorf("read from conn fail: %s", err)
 		}
 
-
+		var plaintext []byte
+		var valid bool
+		ns, plaintext, valid = xx.RecvMessage()
 	}
 
 	return nil

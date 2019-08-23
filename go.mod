@@ -1,4 +1,4 @@
-module github.com/noot/noise
+module github.com/ChainSafe/go-libp2p-noise
 
 go 1.12
 
