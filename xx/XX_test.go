@@ -1,10 +1,12 @@
 package xx
 
 import (
+	"crypto/rand"
 	"encoding/hex"
 	"testing"
-
-	"github.com/ChainSafe/go-libp2p-noise"
+	proto "github.com/gogo/protobuf/proto"
+	pb "github.com/ChainSafe/go-libp2p-noise/pb"
+	"github.com/libp2p/go-libp2p-core/crypto"
 )
 
 func TestGetHkdf(t *testing.T) {
@@ -29,40 +31,88 @@ func TestGetHkdf(t *testing.T) {
 func TestHandshake(t *testing.T) {
 	// generate local static noise key
 	kp_init := GenerateKeypair()
-	kp_remote := GenerateKeypair()
+	kp_resp := GenerateKeypair()
 
+	libp2p_pub_init,libp2p_priv_init,err := crypto.GenerateEd25519Key(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
 	prologue := []byte("/noise/0.0.0")
 
-	// new XX noise session
-	ns_init := InitSession(true, prologue, kp_init, kp_remote.PublicKey())
+	// initiator: new XX noise session
+	ns_init := InitSession(true, prologue, kp_init, kp_resp.PubKey())
 
+	// responder: new XX noise session
+	ns_resp := InitSession(false, prologue, kp_resp, kp_init.PubKey())
+
+	// stage 0: initiator
 	// create payload
-	payload := new(noise.NoiseHandshakePayload)
-	msg, err := proto.Marshal(payload)
+	payload_init := new(pb.NoiseHandshakePayload)
+	payload_init.Libp2PKey = libp2p_pub_init.Raw()
+	payload_init_enc, err := proto.Marshal(payload_init)
 	if err != nil {
-		return fmt.Errorf("proto marshal payload fail: %s", err)
+		t.Fatalf("proto marshal payload fail: %s", err)
 	}
 	
+	// send message
 	var msgbuf MessageBuffer
-	ns, msgbuf = SendMessage(ns, msg)
+	msg := []byte{}
+	msg = append(msg, payload_init_enc[:]...)
+	ns_init, msgbuf = SendMessage(ns_init, msg)
 
-	encMsgBuf := msgbuf.Encode0()
-	if len(encMsgBuf) != 56 {
-		return fmt.Errorf("enc msg buf: len does not equal 56")
-	}
+	t.Logf("stage 0 msgbuf: %v", msgbuf)
 
-	_, err = s.insecure.Write(encMsgBuf)
-	if err != nil {
-		return fmt.Errorf("write to conn fail: %s", err)
-	}
-
-	buf := make([]byte, 144)
-	_, err = s.insecure.Read(buf)
-	if err != nil {
-		return fmt.Errorf("read from conn fail: %s", err)
-	}
-
+	// stage 0: responder
 	var plaintext []byte
 	var valid bool
-	ns, plaintext, valid = RecvMessage()
+	ns_resp, plaintext, valid = RecvMessage(ns_resp, &msgbuf)
+	if !valid {
+		t.Fatalf("stage 0 receive not valid")
+	}
+
+	t.Logf("stage 0 resp payload: %x", plaintext)
+
+	// stage 1: responder
+	// create payload
+	payload_resp := new(pb.NoiseHandshakePayload)
+	//payload.Libp2PKey()
+	payload_resp_enc, err := proto.Marshal(payload_resp)
+	if err != nil {
+		t.Fatalf("proto marshal payload fail: %s", err)
+	}
+	msg = append(msg, payload_resp_enc[:]...)
+	ns_resp, msgbuf = SendMessage(ns_resp, msg)
+
+	t.Logf("stage 1 msgbuf: %v", msgbuf)
+
+	// stage 1: initiator
+	ns_init, plaintext, valid = RecvMessage(ns_init, &msgbuf)
+	if !valid {
+		t.Fatalf("stage 1 receive not valid")
+	} 
+
+	t.Logf("stage 1 resp payload: %x", plaintext)
+
+	// stage 2: initiator
+	payload_init = new(pb.NoiseHandshakePayload)
+	//payload.Libp2PKey()
+	payload_init_enc, err = proto.Marshal(payload_init)
+	if err != nil {
+		t.Fatalf("proto marshal payload fail: %s", err)
+	}
+	
+	// send message
+	msg = append(msg, payload_init_enc[:]...)
+	ns_init, msgbuf = SendMessage(ns_init, msg)
+
+	t.Logf("stage 2 msgbuf: %v", msgbuf)
+
+	// stage 2: responder
+	ns_resp, plaintext, valid = RecvMessage(ns_resp, &msgbuf)
+	if !valid {
+		t.Fatalf("stage 2 receive not valid")
+	}
+
+	t.Logf("stage 2 resp payload: %x", plaintext)
+
 }

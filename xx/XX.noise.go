@@ -87,6 +87,14 @@ func (kp Keypair) PrivKey() [32]byte{
 	return kp.private_key
 }
 
+func NewMessageBuffer(ne [32]byte, ns []byte, ciphertext []byte) MessageBuffer {
+	return MessageBuffer{
+		ne: ne,
+		ns: ns,
+		ciphertext: ciphertext,
+	}
+}
+
 /* ---------------------------------------------------------------- *
  * CONSTANTS                                                        *
  * ---------------------------------------------------------------- */
@@ -124,6 +132,16 @@ func (mb *MessageBuffer) Encode0() []byte {
 
 	return enc
 }
+
+func (mb *MessageBuffer) Encode1() []byte {
+	enc := []byte{}
+
+	enc = append(enc, mb.ne[:]...)
+	enc = append(enc, mb.ciphertext...)
+
+	return enc
+}
+
 
 func validatePublicKey(k []byte) bool {
 	forbiddenCurveValues := [12][]byte{

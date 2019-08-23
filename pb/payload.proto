@@ -1,5 +1,5 @@
 syntax = "proto3";
-package noise;
+package pb;
 
 message NoiseHandshakePayload {
 	bytes libp2p_key = 1;

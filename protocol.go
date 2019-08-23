@@ -12,6 +12,7 @@ import (
 	proto "github.com/gogo/protobuf/proto"
 
 	xx "github.com/ChainSafe/go-libp2p-noise/xx"
+	pb "github.com/ChainSafe/go-libp2p-noise/pb"
 )
 
 type secureSession struct {
@@ -59,7 +60,6 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 
 	// generate local static noise key
 	kp := xx.GenerateKeypair()
-	//pub := xx.GeneratePublicKey(kp.PrivKey())
 
 	// new XX noise session
 	ns := xx.InitSession(s.initiator, s.prologue, kp, remotePub)
@@ -67,7 +67,7 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 	// send initial payload message
 	if s.initiator {
 		// create payload
-		payload := new(NoiseHandshakePayload)
+		payload := new(pb.NoiseHandshakePayload)
 		msg, err := proto.Marshal(payload)
 		if err != nil {
 			return fmt.Errorf("proto marshal payload fail: %s", err)

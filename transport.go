@@ -14,8 +14,6 @@ const ID = "/noise/0.0.0"
 type Transport struct {
 	LocalID peer.ID
 	PrivateKey crypto.PrivKey
-
-	//Payload NoiseHandshakePayload
 }
 
 // SecureInbound runs noise handshake as a server
