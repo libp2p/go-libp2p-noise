@@ -12,7 +12,7 @@ import (
 const ID = "/noise/0.0.0"
 
 type Transport struct {
-	LocalID peer.ID
+	LocalID    peer.ID
 	PrivateKey crypto.PrivKey
 }
 

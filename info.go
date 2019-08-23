@@ -5,6 +5,6 @@ import (
 )
 
 type peerInfo struct {
-	staticKey crypto.PubKey
+	staticKey    crypto.PubKey
 	ephemeralKey crypto.PubKey
 }

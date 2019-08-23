@@ -3,15 +3,15 @@ package xx
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"testing"
-	proto "github.com/gogo/protobuf/proto"
 	pb "github.com/ChainSafe/go-libp2p-noise/pb"
+	proto "github.com/gogo/protobuf/proto"
 	"github.com/libp2p/go-libp2p-core/crypto"
+	"testing"
 )
 
 func TestGetHkdf(t *testing.T) {
 	ck := [32]byte{}
-	ckBytes, err := hex.DecodeString("4e6f6973655f58585f32353531395f58436861436861506f6c795f53484132353600000000000000000000000000000000000000000000000000000000000000")	
+	ckBytes, err := hex.DecodeString("4e6f6973655f58585f32353531395f58436861436861506f6c795f53484132353600000000000000000000000000000000000000000000000000000000000000")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -33,11 +33,36 @@ func TestHandshake(t *testing.T) {
 	kp_init := GenerateKeypair()
 	kp_resp := GenerateKeypair()
 
-	libp2p_pub_init,libp2p_priv_init,err := crypto.GenerateEd25519Key(rand.Reader)
+	payload_string := []byte("noise-libp2p-static-key:")
+	prologue := []byte("/noise/0.0.0")
+
+	// initiator setup
+	libp2p_priv_init, libp2p_pub_init, err := crypto.GenerateEd25519Key(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
 	}
-	prologue := []byte("/noise/0.0.0")
+	libp2p_pub_init_raw, err := libp2p_pub_init.Raw()
+	if err != nil {
+		t.Fatal(err)
+	}
+	libp2p_init_signed_payload, err := libp2p_priv_init.Sign(payload_string)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// respoonder setup
+	libp2p_priv_resp, libp2p_pub_resp, err := crypto.GenerateEd25519Key(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	libp2p_pub_resp_raw, err := libp2p_pub_resp.Raw()
+	if err != nil {
+		t.Fatal(err)
+	}
+	libp2p_resp_signed_payload, err := libp2p_priv_resp.Sign(payload_string)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// initiator: new XX noise session
 	ns_init := InitSession(true, prologue, kp_init, kp_resp.PubKey())
@@ -48,12 +73,13 @@ func TestHandshake(t *testing.T) {
 	// stage 0: initiator
 	// create payload
 	payload_init := new(pb.NoiseHandshakePayload)
-	payload_init.Libp2PKey = libp2p_pub_init.Raw()
+	payload_init.Libp2PKey = libp2p_pub_init_raw
+	payload_init.NoiseStaticKeySignature = libp2p_init_signed_payload
 	payload_init_enc, err := proto.Marshal(payload_init)
 	if err != nil {
 		t.Fatalf("proto marshal payload fail: %s", err)
 	}
-	
+
 	// send message
 	var msgbuf MessageBuffer
 	msg := []byte{}
@@ -75,7 +101,8 @@ func TestHandshake(t *testing.T) {
 	// stage 1: responder
 	// create payload
 	payload_resp := new(pb.NoiseHandshakePayload)
-	//payload.Libp2PKey()
+	payload_init.Libp2PKey = libp2p_pub_resp_raw
+	payload_init.NoiseStaticKeySignature = libp2p_resp_signed_payload
 	payload_resp_enc, err := proto.Marshal(payload_resp)
 	if err != nil {
 		t.Fatalf("proto marshal payload fail: %s", err)
@@ -89,7 +116,7 @@ func TestHandshake(t *testing.T) {
 	ns_init, plaintext, valid = RecvMessage(ns_init, &msgbuf)
 	if !valid {
 		t.Fatalf("stage 1 receive not valid")
-	} 
+	}
 
 	t.Logf("stage 1 resp payload: %x", plaintext)
 
@@ -100,7 +127,7 @@ func TestHandshake(t *testing.T) {
 	if err != nil {
 		t.Fatalf("proto marshal payload fail: %s", err)
 	}
-	
+
 	// send message
 	msg = append(msg, payload_init_enc[:]...)
 	ns_init, msgbuf = SendMessage(ns_init, msg)

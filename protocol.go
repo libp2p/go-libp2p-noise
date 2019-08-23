@@ -6,37 +6,37 @@ import (
 	"net"
 	"time"
 
+	proto "github.com/gogo/protobuf/proto"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/sec"
-	proto "github.com/gogo/protobuf/proto"
 
-	xx "github.com/ChainSafe/go-libp2p-noise/xx"
 	pb "github.com/ChainSafe/go-libp2p-noise/pb"
+	xx "github.com/ChainSafe/go-libp2p-noise/xx"
 )
 
 type secureSession struct {
 	insecure net.Conn
 
 	initiator bool
-	prologue []byte
+	prologue  []byte
 
-	localKey crypto.PrivKey
-	localPeer peer.ID
+	localKey   crypto.PrivKey
+	localPeer  peer.ID
 	remotePeer peer.ID
 
-	local peerInfo
+	local  peerInfo
 	remote peerInfo
 }
 
 func newSecureSession(ctx context.Context, local peer.ID, privKey crypto.PrivKey, insecure net.Conn, remote peer.ID, initiator bool) (sec.SecureConn, error) {
 
 	s := &secureSession{
-		insecure: insecure,
-		initiator: initiator,
-		prologue: []byte(ID),
-		localKey: privKey,
-		localPeer: local,
+		insecure:   insecure,
+		initiator:  initiator,
+		prologue:   []byte(ID),
+		localKey:   privKey,
+		localPeer:  local,
 		remotePeer: remote,
 	}
 
@@ -48,7 +48,7 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 	// TODO: check if static key for peer exists
 	// if so, do XX; otherwise do IK
 
-	// PHASE 1: TRY XX 
+	// PHASE 1: TRY XX
 
 	// get remote static key
 	remotePub := [32]byte{}
@@ -72,7 +72,7 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("proto marshal payload fail: %s", err)
 		}
-		
+
 		var msgbuf xx.MessageBuffer
 		ns, msgbuf = xx.SendMessage(ns, msg)
 
@@ -86,15 +86,15 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 			return fmt.Errorf("write to conn fail: %s", err)
 		}
 
-		buf := make([]byte, 144)
-		_, err = s.insecure.Read(buf)
-		if err != nil {
-			return fmt.Errorf("read from conn fail: %s", err)
-		}
+		// 	buf := make([]byte, 144)
+		// 	_, err = s.insecure.Read(buf)
+		// 	if err != nil {
+		// 		return fmt.Errorf("read from conn fail: %s", err)
+		// 	}
 
-		var plaintext []byte
-		var valid bool
-		ns, plaintext, valid = xx.RecvMessage()
+		// 	var plaintext []byte
+		// 	var valid bool
+		// 	ns, plaintext, valid = xx.RecvMessage(ns, )
 	}
 
 	return nil

@@ -15,8 +15,8 @@ package xx
 
 import (
 	"crypto/rand"
-	"crypto/subtle"
 	"crypto/sha256"
+	"crypto/subtle"
 
 	"encoding/binary"
 	//"golang.org/x/crypto/blake2s"
@@ -74,23 +74,23 @@ type noisesession struct {
 
 func NewKeypair(pub [32]byte, priv [32]byte) Keypair {
 	return Keypair{
-		public_key: pub,
+		public_key:  pub,
 		private_key: priv,
 	}
 }
 
-func (kp Keypair) PubKey() [32]byte{
+func (kp Keypair) PubKey() [32]byte {
 	return kp.public_key
 }
 
-func (kp Keypair) PrivKey() [32]byte{
+func (kp Keypair) PrivKey() [32]byte {
 	return kp.private_key
 }
 
 func NewMessageBuffer(ne [32]byte, ns []byte, ciphertext []byte) MessageBuffer {
 	return MessageBuffer{
-		ne: ne,
-		ns: ns,
+		ne:         ne,
+		ns:         ns,
 		ciphertext: ciphertext,
 	}
 }
@@ -142,7 +142,6 @@ func (mb *MessageBuffer) Encode1() []byte {
 	return enc
 }
 
-
 func validatePublicKey(k []byte) bool {
 	forbiddenCurveValues := [12][]byte{
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
@@ -166,6 +165,7 @@ func validatePublicKey(k []byte) bool {
 	}
 	return true
 }
+
 /* ---------------------------------------------------------------- *
  * PRIMITIVES                                                       *
  * ---------------------------------------------------------------- */
