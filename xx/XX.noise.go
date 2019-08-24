@@ -26,6 +26,7 @@ import (
 	"hash"
 	"io"
 	"math"
+	//log "github.com/ChainSafe/log15"
 )
 
 /* ---------------------------------------------------------------- *
@@ -151,8 +152,11 @@ func (mb *MessageBuffer) Encode1() []byte {
 	enc := []byte{}
 
 	enc = append(enc, mb.ne[:]...)
-	enc = append(enc, mb.ns[:]...)
+	enc = append(enc, mb.ns...)
 	enc = append(enc, mb.ciphertext...)
+
+	// log.Debug("XX_Encode1", "ne", mb.ne)
+	// log.Debug("XX_Encode1", "ns", mb.ns)
 
 	return enc
 }
@@ -163,9 +167,11 @@ func Decode0(in []byte) (*MessageBuffer, error) {
 		return nil, errors.New("cannot decode stage 0 MessageBuffer: length less than 32 bytes")
 	}
 
+	//log.Debug("XX_Decode0", "in", in)
 	mb := new(MessageBuffer)
 	copy(mb.ne[:], in[:32])
-	copy(mb.ciphertext, in[32:])
+	mb.ciphertext = in[32:]
+	//log.Debug("XX_Decode0", "mb", mb)
 
 	return mb, nil
 }
@@ -176,10 +182,15 @@ func Decode1(in []byte) (*MessageBuffer, error) {
 		return nil, errors.New("cannot decode stage 1/2 MessageBuffer: length less than 96 bytes")
 	}
 
+	// log.Debug("XX_Decode1", "in", in)
+	// log.Debug("XX_Decode1", "ns", in[32:80])
+
 	mb := new(MessageBuffer)
 	copy(mb.ne[:], in[:32])
-	copy(mb.ns, in[32:80])
-	copy(mb.ciphertext, in[80:])
+	mb.ns = in[32:80]
+	mb.ciphertext = in[80:]
+	// copy(mb.ns,)
+	// copy(mb.ciphertext,)
 
 	return mb, nil
 }

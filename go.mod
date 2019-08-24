@@ -3,6 +3,7 @@ module github.com/ChainSafe/go-libp2p-noise
 go 1.12
 
 require (
+	github.com/ChainSafe/log15 v1.0.0
 	github.com/gogo/protobuf v1.2.1
 	github.com/golang/protobuf v1.3.2
 	github.com/libp2p/go-libp2p-core v0.2.2

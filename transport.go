@@ -18,12 +18,12 @@ type Transport struct {
 	PrivateKey crypto.PrivKey
 }
 
-// SecureInbound runs noise handshake as a server
+// SecureInbound runs noise handshake as the responder
 func (t *Transport) SecureInbound(ctx context.Context, insecure net.Conn) (sec.SecureConn, error) {
 	return newSecureSession(ctx, t.LocalID, t.PrivateKey, insecure, "", false)
 }
 
-// SecureOutbound runs noise handshake as a client
+// SecureOutbound runs noise handshake as the initiator
 func (t *Transport) SecureOutbound(ctx context.Context, insecure net.Conn, p peer.ID) (sec.SecureConn, error) {
 	return newSecureSession(ctx, t.LocalID, t.PrivateKey, insecure, p, true)
 }
