@@ -72,6 +72,14 @@ type NoiseSession struct {
 	i   bool
 }
 
+func (ns *NoiseSession) CS1() *cipherstate {
+	return &ns.cs1
+}
+
+func (ns *NoiseSession) CS2() *cipherstate {
+	return &ns.cs2
+}
+
 func NewKeypair(pub [32]byte, priv [32]byte) Keypair {
 	return Keypair{
 		public_key:  pub,
@@ -320,13 +328,13 @@ func setNonce(cs *cipherstate, newNonce uint32) *cipherstate {
 	return cs
 }
 
-func encryptWithAd(cs *cipherstate, ad []byte, plaintext []byte) (*cipherstate, []byte) {
+func EncryptWithAd(cs *cipherstate, ad []byte, plaintext []byte) (*cipherstate, []byte) {
 	e := encrypt(cs.k, cs.n, ad, plaintext)
 	cs = setNonce(cs, incrementNonce(cs.n))
 	return cs, e
 }
 
-func decryptWithAd(cs *cipherstate, ad []byte, ciphertext []byte) (*cipherstate, []byte, bool) {
+func DecryptWithAd(cs *cipherstate, ad []byte, ciphertext []byte) (*cipherstate, []byte, bool) {
 	valid, ad, plaintext := decrypt(cs.k, cs.n, ad, ciphertext)
 	cs = setNonce(cs, incrementNonce(cs.n))
 	return cs, plaintext, valid
@@ -375,7 +383,7 @@ func getHandshakeHash(ss *symmetricstate) [32]byte {
 func encryptAndHash(ss *symmetricstate, plaintext []byte) (*symmetricstate, []byte) {
 	var ciphertext []byte
 	if hasKey(&ss.cs) {
-		_, ciphertext = encryptWithAd(&ss.cs, ss.h[:], plaintext)
+		_, ciphertext = EncryptWithAd(&ss.cs, ss.h[:], plaintext)
 	} else {
 		ciphertext = plaintext
 	}
@@ -387,7 +395,7 @@ func decryptAndHash(ss *symmetricstate, ciphertext []byte) (*symmetricstate, []b
 	var plaintext []byte
 	var valid bool
 	if hasKey(&ss.cs) {
-		_, plaintext, valid = decryptWithAd(&ss.cs, ss.h[:], ciphertext)
+		_, plaintext, valid = DecryptWithAd(&ss.cs, ss.h[:], ciphertext)
 	} else {
 		plaintext, valid = ciphertext, true
 	}

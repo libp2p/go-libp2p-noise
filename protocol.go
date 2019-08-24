@@ -37,6 +37,9 @@ type secureSession struct {
 	xx_ns *xx.NoiseSession
 	ik_ns *ik.NoiseSession
 
+	xx_complete bool
+	ik_complete bool
+
 	noisePipesSupport   bool
 	noiseStaticKeyCache map[peer.ID]([32]byte)
 
@@ -139,6 +142,8 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 			// }
 		}
 
+		s.ik_complete = true
+
 	} else {
 
 		// unknown static key for peer, try XX //
@@ -156,7 +161,11 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 				// 	return fmt.Errorf("runHandshake_xx err %s", err)
 				// }
 			}
+
+			s.ik_complete = true
 		}
+
+		s.xx_complete = true
 	}
 
 	return nil
@@ -178,9 +187,9 @@ func (s *secureSession) LocalPublicKey() crypto.PubKey {
 	return s.localKey.GetPublic()
 }
 
-func (s *secureSession) Read(in []byte) (int, error) {
+func (s *secureSession) Read(buf []byte) (int, error) {
 	// TODO: use noise symmetric keys
-	return s.insecure.Read(in)
+	return s.insecure.Read(buf)
 }
 
 func (s *secureSession) RemoteAddr() net.Addr {

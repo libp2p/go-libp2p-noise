@@ -158,9 +158,9 @@ func TestSymmetricEncryptAndDecrypt(t *testing.T) {
 	var ok bool
 	ad := []byte("authenticated")
 	msg := []byte("helloworld")
-	cs1_init, out = encryptWithAd(cs1_init, ad, msg)
+	cs1_init, out = EncryptWithAd(cs1_init, ad, msg)
 
-	cs1_resp, out, ok = decryptWithAd(cs1_resp, ad, out)
+	cs1_resp, out, ok = DecryptWithAd(cs1_resp, ad, out)
 	if !ok {
 		t.Fatal("could not decrypt")
 	}
@@ -175,18 +175,18 @@ func TestSymmetricEncryptAndDecryptAgain(t *testing.T) {
 	var ok bool
 	ad := []byte("authenticated")
 	msg := []byte("helloworld")
-	cs2_resp, out = encryptWithAd(cs2_resp, ad, msg)
+	cs2_resp, out = EncryptWithAd(cs2_resp, ad, msg)
 
-	cs2_init, out, ok = decryptWithAd(cs2_init, ad, out)
+	cs2_init, out, ok = DecryptWithAd(cs2_init, ad, out)
 	if !ok {
 		t.Fatal("could not decrypt")
 	}
 
 	ad = []byte("authenticatedagain")
 	msg = []byte("helloworld2")
-	cs2_resp, out = encryptWithAd(cs2_resp, ad, msg)
+	cs2_resp, out = EncryptWithAd(cs2_resp, ad, msg)
 
-	cs2_init, out, ok = decryptWithAd(cs2_init, ad, out)
+	cs2_init, out, ok = DecryptWithAd(cs2_init, ad, out)
 	if !ok {
 		t.Fatal("could not decrypt")
 	}
