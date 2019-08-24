@@ -183,8 +183,6 @@ func TestHandshakeIK(t *testing.T) {
 	respConn.Close()
 
 	initConn, respConn = connect(t, initTransport, respTransport)
-	t.Log(initTransport)
-	t.Log(respTransport)
 	defer initConn.Close()
 	defer respConn.Close()
 

@@ -126,20 +126,24 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 	log.Debug("runHandshake", "cache", s.noiseStaticKeyCache)
 
 	// if we have the peer's noise static key and we support noise pipes, we can try IK
-	if s.noiseStaticKeyCache[s.remotePeer] != [32]byte{} && s.noisePipesSupport {
+	if s.noiseStaticKeyCache[s.remotePeer] != [32]byte{} || s.noisePipesSupport {
 		log.Debug("runHandshake_ik")
 
 		// known static key for peer, try IK  //
 
-		_, err := s.runHandshake_ik(ctx, nil)
+		buf, err := s.runHandshake_ik(ctx)
 		if err != nil {
 			log.Error("runHandshake_ik", "err", err)
-			return err
+
 			// TODO: PIPE TO XX
-			// _, err := s.runHandshake_xx(ctx, true, buf)
-			// if err != nil {
-			// 	return fmt.Errorf("runHandshake_xx err %s", err)
-			// }
+
+			err = s.runHandshake_xx(ctx, true, buf)
+			if err != nil {
+				log.Error("runHandshake_xx", "err", err)
+				return fmt.Errorf("runHandshake_xx err %s", err)
+			}
+
+			s.xx_complete = true
 		}
 
 		s.ik_complete = true
@@ -148,21 +152,10 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 
 		// unknown static key for peer, try XX //
 
-		handshakeData, err := s.runHandshake_xx(ctx, false, nil)
+		err := s.runHandshake_xx(ctx, false, nil)
 		if err != nil {
 			log.Error("runHandshake_xx", "err", err)
-			log.Debug("try runHandshake_ik...")
-			_, err := s.runHandshake_ik(ctx, handshakeData)
-			if err != nil {
-				log.Error("runHandshake_ik", "err", err)
-				return err
-				// _, err = s.runHandshake_xx(ctx, true, msg[:32])
-				// if err != nil {
-				// 	return fmt.Errorf("runHandshake_xx err %s", err)
-				// }
-			}
-
-			s.ik_complete = true
+			return err
 		}
 
 		s.xx_complete = true
@@ -189,7 +182,7 @@ func (s *secureSession) LocalPublicKey() crypto.PubKey {
 
 func (s *secureSession) Read(buf []byte) (int, error) {
 	// TODO: use noise symmetric keys
-	//return s.insecure.Read(buf)
+	return s.insecure.Read(buf)
 
 	plaintext, err := s.ReadSecure()
 	if err != nil {
@@ -241,7 +234,7 @@ func (s *secureSession) SetWriteDeadline(t time.Time) error {
 
 func (s *secureSession) Write(in []byte) (int, error) {
 	// TODO: use noise symmetric keys
-	//return s.insecure.Write(in)
+	return s.insecure.Write(in)
 
 	err := s.WriteSecure(in)
 	return len(in), err

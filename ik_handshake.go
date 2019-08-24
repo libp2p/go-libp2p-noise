@@ -17,11 +17,11 @@ func (s *secureSession) ik_sendHandshakeMessage(payload []byte, initial_stage bo
 	var msgbuf ik.MessageBuffer
 	s.ik_ns, msgbuf = ik.SendMessage(s.ik_ns, payload)
 	var encMsgBuf []byte
-	if initial_stage {
-		encMsgBuf = msgbuf.Encode0()
-	} else {
-		encMsgBuf = msgbuf.Encode1()
-	}
+	//if initial_stage {
+	encMsgBuf = msgbuf.Encode0()
+	// } else {
+	// 	encMsgBuf = msgbuf.Encode1()
+	// }
 
 	log.Debug("ik_sendHandshakeMessage", "initiator", s.initiator, "msgbuf", msgbuf)
 	log.Debug("ik_sendHandshakeMessage", "initiator", s.initiator, "encMsgBuf", encMsgBuf, "ns_len", len(msgbuf.NS()), "enc_len", len(encMsgBuf))
@@ -56,11 +56,11 @@ func (s *secureSession) ik_recvHandshakeMessage(initial_stage bool) (buf []byte,
 	}
 
 	var msgbuf *ik.MessageBuffer
-	if initial_stage {
-		msgbuf, err = ik.Decode0(buf)
-	} else {
-		msgbuf, err = ik.Decode1(buf)
-	}
+	//if initial_stage {
+	msgbuf, err = ik.Decode0(buf)
+	// } else {
+	// 	msgbuf, err = ik.Decode1(buf)
+	// }
 
 	log.Debug("ik_recvHandshakeMessage", "initiator", s.initiator, "msgbuf", msgbuf, "buf len", len(buf))
 
@@ -81,7 +81,7 @@ func (s *secureSession) ik_recvHandshakeMessage(initial_stage bool) (buf []byte,
 }
 
 // returns last successful message upon error
-func (s *secureSession) runHandshake_ik(ctx context.Context, handshakeData []byte) ([]byte, error) {
+func (s *secureSession) runHandshake_ik(ctx context.Context) ([]byte, error) {
 	var kp ik.Keypair
 
 	if s.noisePrivateKey == [32]byte{} {
@@ -176,25 +176,10 @@ func (s *secureSession) runHandshake_ik(ctx context.Context, handshakeData []byt
 		var buf, plaintext []byte
 		var valid bool
 
-		if handshakeData != nil {
-			buf = handshakeData
-			var msgbuf *ik.MessageBuffer
-			msgbuf, err = ik.Decode0(handshakeData)
-
-			log.Debug("stage 0 ik_recvHandshakeMessage", "initiator", s.initiator, "msgbuf", msgbuf, "buf len", len(handshakeData))
-
-			if err != nil {
-				return buf, fmt.Errorf("stage 0 responder fail: %s", err)
-			}
-
-			s.ik_ns, plaintext, valid = ik.RecvMessage(s.ik_ns, msgbuf)
-		} else {
-			// read message
-			buf, plaintext, valid, err = s.ik_recvHandshakeMessage(true)
-			if err != nil {
-				return buf, fmt.Errorf("stage 0 responder fail: %s", err)
-			}
-
+		// read message
+		buf, plaintext, valid, err = s.ik_recvHandshakeMessage(true)
+		if err != nil {
+			return buf, fmt.Errorf("stage 0 responder fail: %s", err)
 		}
 
 		if !valid {
@@ -239,5 +224,6 @@ func (s *secureSession) runHandshake_ik(ctx context.Context, handshakeData []byt
 
 	}
 
+	log.Debug("ik_handshake done", "initiator", s.initiator)
 	return nil, nil
 }

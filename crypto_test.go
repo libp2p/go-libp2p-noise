@@ -1,4 +1,4 @@
-package noise 
+package noise
 
 import (
 	"bytes"
