@@ -86,7 +86,7 @@ func doHandshake(t *testing.T) (*NoiseSession, *NoiseSession) {
 	var msgbuf MessageBuffer
 	msg := []byte{}
 	msg = append(msg, payload_init_enc[:]...)
-	ns_init, msgbuf = SendMessage(ns_init, msg)
+	ns_init, msgbuf = SendMessage(ns_init, msg, nil)
 
 	t.Logf("stage 0 msgbuf: %v", msgbuf)
 	t.Logf("stage 0 msgbuf ne len: %d", len(msgbuf.NE()))
@@ -111,7 +111,7 @@ func doHandshake(t *testing.T) (*NoiseSession, *NoiseSession) {
 		t.Fatalf("proto marshal payload fail: %s", err)
 	}
 	msg = append(msg, payload_resp_enc[:]...)
-	ns_resp, msgbuf = SendMessage(ns_resp, msg)
+	ns_resp, msgbuf = SendMessage(ns_resp, msg, nil)
 
 	t.Logf("stage 1 msgbuf: %v", msgbuf)
 	t.Logf("stage 1 msgbuf ne len: %d", len(msgbuf.NE()))
@@ -128,7 +128,7 @@ func doHandshake(t *testing.T) (*NoiseSession, *NoiseSession) {
 	// stage 2: initiator
 	// send message
 	//msg = append(msg, payload_init_enc[:]...)
-	ns_init, msgbuf = SendMessage(ns_init, nil)
+	ns_init, msgbuf = SendMessage(ns_init, nil, nil)
 
 	t.Logf("stage 2 msgbuf: %v", msgbuf)
 	t.Logf("stage 2 msgbuf ne len: %d", len(msgbuf.NE()))

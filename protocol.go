@@ -84,6 +84,19 @@ func (s *secureSession) NoisePrivateKey() [32]byte {
 	return s.noisePrivateKey
 }
 
+func (s *secureSession) ReadLength() (int, error) {
+	buf := make([]byte, 2)
+	_, err := s.insecure.Read(buf)
+	return int(binary.BigEndian.Uint16(buf)), err
+}
+
+func (s *secureSession) WriteLength(length int) error {
+	buf := make([]byte, 2)
+	binary.BigEndian.PutUint16(buf, uint16(length))
+	_, err := s.insecure.Write(buf)
+	return err
+}
+
 func (s *secureSession) setRemotePeerInfo(key []byte) (err error) {
 	s.remote.libp2pKey, err = crypto.UnmarshalPublicKey(key)
 	return err
@@ -98,6 +111,8 @@ func (s *secureSession) verifyPayload(payload *pb.NoiseHandshakePayload, noiseKe
 	sig := payload.GetNoiseStaticKeySignature()
 	msg := append([]byte(payload_string), noiseKey[:]...)
 
+	log.Debug("verifyPayload", "msg", msg)
+
 	ok, err := s.RemotePublicKey().Verify(msg, sig)
 	if err != nil {
 		return err
@@ -106,19 +121,6 @@ func (s *secureSession) verifyPayload(payload *pb.NoiseHandshakePayload, noiseKe
 	}
 
 	return nil
-}
-
-func (s *secureSession) ReadLength() (int, error) {
-	buf := make([]byte, 2)
-	_, err := s.insecure.Read(buf)
-	return int(binary.BigEndian.Uint16(buf)), err
-}
-
-func (s *secureSession) WriteLength(length int) error {
-	buf := make([]byte, 2)
-	binary.BigEndian.PutUint16(buf, uint16(length))
-	_, err := s.insecure.Write(buf)
-	return err
 }
 
 func (s *secureSession) runHandshake(ctx context.Context) error {

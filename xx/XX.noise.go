@@ -442,7 +442,7 @@ func writeMessageA(hs *handshakestate, payload []byte, e *Keypair) (*handshakest
 	ne, ns, ciphertext := emptyKey, []byte{}, []byte{}
 
 	if e == nil {
-		hs.e = GenerateKeypair()	
+		hs.e = GenerateKeypair()
 	} else {
 		hs.e = *e
 	}

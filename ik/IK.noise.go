@@ -91,7 +91,6 @@ func NewKeypair(pub [32]byte, priv [32]byte) Keypair {
 	}
 }
 
-
 func (kp Keypair) PubKey() [32]byte {
 	return kp.public_key
 }

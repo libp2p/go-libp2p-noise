@@ -140,7 +140,7 @@ func (s *secureSession) runHandshake_xx(ctx context.Context, fallback bool, init
 			}
 		} else {
 			e_ik := s.ik_ns.Ephemeral()
-			log.Debug("xxfallback stage 0 initiator", "ephemeral keys from ik", e_ik )
+			log.Debug("xxfallback stage 0 initiator", "ephemeral keys from ik", e_ik)
 			e_xx := xx.NewKeypair(e_ik.PubKey(), e_ik.PrivKey())
 
 			// initialize state as if we sent the first message
@@ -338,6 +338,8 @@ func (s *secureSession) runHandshake_xx(ctx context.Context, fallback bool, init
 				return fmt.Errorf("stage 2 responder: remote libp2p key does not match remote peer.ID")
 			}
 		}
+
+		s.remote.noiseKey = s.xx_ns.RemoteKey()
 
 		// verify payload is signed by libp2p key
 		err = s.verifyPayload(nhp, s.remote.noiseKey)
