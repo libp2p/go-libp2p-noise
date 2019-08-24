@@ -12,12 +12,13 @@ IK:
  * PARAMETERS                                                       *
  * ---------------------------------------------------------------- */
 
-package main
+package ik
 
 import (
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/binary"
+	"errors"
 	"golang.org/x/crypto/blake2s"
 	"golang.org/x/crypto/chacha20poly1305"
 	"golang.org/x/crypto/curve25519"
@@ -36,7 +37,7 @@ type keypair struct {
 	private_key [32]byte
 }
 
-type messagebuffer struct {
+type MessageBuffer struct {
 	ne         [32]byte
 	ns         []byte
 	ciphertext []byte
@@ -62,7 +63,7 @@ type handshakestate struct {
 	psk [32]byte
 }
 
-type noisesession struct {
+type NoiseSession struct {
 	hs  handshakestate
 	h   [32]byte
 	cs1 cipherstate
@@ -98,6 +99,76 @@ func getPublicKey(kp *keypair) [32]byte {
 
 func isEmptyKey(k [32]byte) bool {
 	return subtle.ConstantTimeCompare(k[:], emptyKey[:]) == 1
+}
+
+func (mb *MessageBuffer) NE() [32]byte {
+	return mb.ne
+}
+
+func (mb *MessageBuffer) NS() []byte {
+	return mb.ns
+}
+
+func (mb *MessageBuffer) Ciphertext() []byte {
+	return mb.ciphertext
+}
+
+// Encodes a MessageBuffer from stage 0
+func (mb *MessageBuffer) Encode0() []byte {
+	enc := []byte{}
+
+	enc = append(enc, mb.ne[:]...)
+	enc = append(enc, mb.ciphertext...)
+
+	return enc
+}
+
+// Encodes a MessageBuffer from stage 1 and 2
+func (mb *MessageBuffer) Encode1() []byte {
+	enc := []byte{}
+
+	enc = append(enc, mb.ne[:]...)
+	enc = append(enc, mb.ns...)
+	enc = append(enc, mb.ciphertext...)
+
+	// log.Debug("XX_Encode1", "ne", mb.ne)
+	// log.Debug("XX_Encode1", "ns", mb.ns)
+
+	return enc
+}
+
+// Decodes initial message (stage 0) into MessageBuffer
+func Decode0(in []byte) (*MessageBuffer, error) {
+	if len(in) < 32 {
+		return nil, errors.New("cannot decode stage 0 MessageBuffer: length less than 32 bytes")
+	}
+
+	//log.Debug("XX_Decode0", "in", in)
+	mb := new(MessageBuffer)
+	copy(mb.ne[:], in[:32])
+	mb.ciphertext = in[32:]
+	//log.Debug("XX_Decode0", "mb", mb)
+
+	return mb, nil
+}
+
+// Decodes messages at stage 1 or 2 into MessageBuffer
+func Decode1(in []byte) (*MessageBuffer, error) {
+	if len(in) < 80 {
+		return nil, errors.New("cannot decode stage 1/2 MessageBuffer: length less than 96 bytes")
+	}
+
+	// log.Debug("XX_Decode1", "in", in)
+	// log.Debug("XX_Decode1", "ns", in[32:80])
+
+	mb := new(MessageBuffer)
+	copy(mb.ne[:], in[:32])
+	mb.ns = in[32:80]
+	mb.ciphertext = in[80:]
+	// copy(mb.ns,)
+	// copy(mb.ciphertext,)
+
+	return mb, nil
 }
 
 func validatePublicKey(k []byte) bool {
@@ -327,7 +398,7 @@ func initializeResponder(prologue []byte, s keypair, rs [32]byte, psk [32]byte) 
 	return handshakestate{ss, s, e, rs, re, psk}
 }
 
-func writeMessageA(hs *handshakestate, payload []byte) (*handshakestate, messagebuffer) {
+func writeMessageA(hs *handshakestate, payload []byte) (*handshakestate, MessageBuffer) {
 	ne, ns, ciphertext := emptyKey, []byte{}, []byte{}
 	hs.e = generateKeypair()
 	ne = hs.e.public_key
@@ -339,11 +410,11 @@ func writeMessageA(hs *handshakestate, payload []byte) (*handshakestate, message
 	_, ns = encryptAndHash(&hs.ss, spk)
 	mixKey(&hs.ss, dh(hs.s.private_key, hs.rs))
 	_, ciphertext = encryptAndHash(&hs.ss, payload)
-	messageBuffer := messagebuffer{ne, ns, ciphertext}
+	messageBuffer := MessageBuffer{ne, ns, ciphertext}
 	return hs, messageBuffer
 }
 
-func writeMessageB(hs *handshakestate, payload []byte) ([32]byte, messagebuffer, cipherstate, cipherstate) {
+func writeMessageB(hs *handshakestate, payload []byte) ([32]byte, MessageBuffer, cipherstate, cipherstate) {
 	ne, ns, ciphertext := emptyKey, []byte{}, []byte{}
 	hs.e = generateKeypair()
 	ne = hs.e.public_key
@@ -352,12 +423,12 @@ func writeMessageB(hs *handshakestate, payload []byte) ([32]byte, messagebuffer,
 	mixKey(&hs.ss, dh(hs.e.private_key, hs.re))
 	mixKey(&hs.ss, dh(hs.e.private_key, hs.rs))
 	_, ciphertext = encryptAndHash(&hs.ss, payload)
-	messageBuffer := messagebuffer{ne, ns, ciphertext}
+	messageBuffer := MessageBuffer{ne, ns, ciphertext}
 	cs1, cs2 := split(&hs.ss)
 	return hs.ss.h, messageBuffer, cs1, cs2
 }
 
-func readMessageA(hs *handshakestate, message *messagebuffer) (*handshakestate, []byte, bool) {
+func readMessageA(hs *handshakestate, message *MessageBuffer) (*handshakestate, []byte, bool) {
 	valid1 := true
 	if validatePublicKey(message.ne[:]) {
 		hs.re = message.ne
@@ -374,7 +445,7 @@ func readMessageA(hs *handshakestate, message *messagebuffer) (*handshakestate, 
 	return hs, plaintext, (valid1 && valid2)
 }
 
-func readMessageB(hs *handshakestate, message *messagebuffer) ([32]byte, []byte, bool, cipherstate, cipherstate) {
+func readMessageB(hs *handshakestate, message *MessageBuffer) ([32]byte, []byte, bool, cipherstate, cipherstate) {
 	valid1 := true
 	if validatePublicKey(message.ne[:]) {
 		hs.re = message.ne
@@ -392,8 +463,8 @@ func readMessageB(hs *handshakestate, message *messagebuffer) ([32]byte, []byte,
  * PROCESSES                                                        *
  * ---------------------------------------------------------------- */
 
-func InitSession(initiator bool, prologue []byte, s keypair, rs [32]byte) noisesession {
-	var session noisesession
+func InitSession(initiator bool, prologue []byte, s keypair, rs [32]byte) *NoiseSession {
+	var session NoiseSession
 	psk := emptyKey
 	if initiator {
 		session.hs = initializeInitiator(prologue, s, rs, psk)
@@ -402,11 +473,11 @@ func InitSession(initiator bool, prologue []byte, s keypair, rs [32]byte) noises
 	}
 	session.i = initiator
 	session.mc = 0
-	return session
+	return &session
 }
 
-func SendMessage(session *noisesession, message []byte) (*noisesession, messagebuffer) {
-	var messageBuffer messagebuffer
+func SendMessage(session *NoiseSession, message []byte) (*NoiseSession, MessageBuffer) {
+	var messageBuffer MessageBuffer
 	if session.mc == 0 {
 		_, messageBuffer = writeMessageA(&session.hs, message)
 	}
@@ -418,7 +489,7 @@ func SendMessage(session *noisesession, message []byte) (*noisesession, messageb
 	return session, messageBuffer
 }
 
-func RecvMessage(session *noisesession, message *messagebuffer) (*noisesession, []byte, bool) {
+func RecvMessage(session *NoiseSession, message *MessageBuffer) (*NoiseSession, []byte, bool) {
 	var plaintext []byte
 	var valid bool
 	if session.mc == 0 {
