@@ -27,6 +27,22 @@ func newTestTransport(t *testing.T, typ, bits int) *Transport {
 	}
 }
 
+func newTestTransportPipes(t *testing.T, typ, bits int) *Transport {
+	priv, pub, err := crypto.GenerateKeyPair(typ, bits)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, err := peer.IDFromPublicKey(pub)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &Transport{
+		LocalID:           id,
+		PrivateKey:        priv,
+		NoisePipesSupport: true,
+	}
+}
+
 // Create a new pair of connected TCP sockets.
 func newConnPair(t *testing.T) (net.Conn, net.Conn) {
 	lstnr, err := net.Listen("tcp", "localhost:0")
@@ -157,7 +173,8 @@ func TestRW(t *testing.T) {
 	}
 }
 
-func TestHandshake(t *testing.T) {
+// Tests XX handshake
+func TestHandshakeXX(t *testing.T) {
 	initTransport := newTestTransport(t, crypto.Ed25519, 2048)
 	respTransport := newTestTransport(t, crypto.Ed25519, 2048)
 
@@ -180,4 +197,37 @@ func TestHandshake(t *testing.T) {
 	if !bytes.Equal(before, after) {
 		t.Errorf("Message mismatch. %v != %v", before, after)
 	}
+}
+
+// Test noise pipes
+func TestHandshakeIK(t *testing.T) {
+	initTransport := newTestTransportPipes(t, crypto.Ed25519, 2048)
+	respTransport := newTestTransportPipes(t, crypto.Ed25519, 2048)
+
+	initConn, respConn := connect(t, initTransport, respTransport)
+	initConn.Close()
+	respConn.Close()
+
+	initConn, respConn = connect(t, initTransport, respTransport)
+	t.Log(initTransport)
+	t.Log(respTransport)
+	defer initConn.Close()
+	defer respConn.Close()
+
+	before := []byte("hello world")
+	_, err := initConn.Write(before)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	after := make([]byte, len(before))
+	_, err = io.ReadFull(respConn, after)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !bytes.Equal(before, after) {
+		t.Errorf("Message mismatch. %v != %v", before, after)
+	}
+
 }

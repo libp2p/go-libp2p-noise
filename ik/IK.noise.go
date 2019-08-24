@@ -32,7 +32,7 @@ import (
  * TYPES                                                            *
  * ---------------------------------------------------------------- */
 
-type keypair struct {
+type Keypair struct {
 	public_key  [32]byte
 	private_key [32]byte
 }
@@ -56,8 +56,8 @@ type symmetricstate struct {
 
 type handshakestate struct {
 	ss  symmetricstate
-	s   keypair
-	e   keypair
+	s   Keypair
+	e   Keypair
 	rs  [32]byte
 	re  [32]byte
 	psk [32]byte
@@ -70,6 +70,33 @@ type NoiseSession struct {
 	cs2 cipherstate
 	mc  uint64
 	i   bool
+}
+
+func NewKeypair(pub [32]byte, priv [32]byte) Keypair {
+	return Keypair{
+		public_key:  pub,
+		private_key: priv,
+	}
+}
+
+func (kp Keypair) PubKey() [32]byte {
+	return kp.public_key
+}
+
+func (kp Keypair) PrivKey() [32]byte {
+	return kp.private_key
+}
+
+func (ns *NoiseSession) RemoteKey() [32]byte {
+	return ns.hs.rs
+}
+
+func NewMessageBuffer(ne [32]byte, ns []byte, ciphertext []byte) MessageBuffer {
+	return MessageBuffer{
+		ne:         ne,
+		ns:         ns,
+		ciphertext: ciphertext,
+	}
 }
 
 /* ---------------------------------------------------------------- *
@@ -93,7 +120,7 @@ var minNonce = uint32(0)
  * UTILITY FUNCTIONS                                                *
  * ---------------------------------------------------------------- */
 
-func getPublicKey(kp *keypair) [32]byte {
+func getPublicKey(kp *Keypair) [32]byte {
 	return kp.public_key
 }
 
@@ -118,24 +145,25 @@ func (mb *MessageBuffer) Encode0() []byte {
 	enc := []byte{}
 
 	enc = append(enc, mb.ne[:]...)
+	enc = append(enc, mb.ns...)
 	enc = append(enc, mb.ciphertext...)
 
 	return enc
 }
 
 // Encodes a MessageBuffer from stage 1 and 2
-func (mb *MessageBuffer) Encode1() []byte {
-	enc := []byte{}
+// func (mb *MessageBuffer) Encode1() []byte {
+// 	enc := []byte{}
 
-	enc = append(enc, mb.ne[:]...)
-	enc = append(enc, mb.ns...)
-	enc = append(enc, mb.ciphertext...)
+// 	enc = append(enc, mb.ne[:]...)
+// 	enc = append(enc, mb.ns...)
+// 	enc = append(enc, mb.ciphertext...)
 
-	// log.Debug("XX_Encode1", "ne", mb.ne)
-	// log.Debug("XX_Encode1", "ns", mb.ns)
+// 	// log.Debug("XX_Encode1", "ne", mb.ne)
+// 	// log.Debug("XX_Encode1", "ns", mb.ns)
 
-	return enc
-}
+// 	return enc
+// }
 
 // Decodes initial message (stage 0) into MessageBuffer
 func Decode0(in []byte) (*MessageBuffer, error) {
@@ -146,30 +174,31 @@ func Decode0(in []byte) (*MessageBuffer, error) {
 	//log.Debug("XX_Decode0", "in", in)
 	mb := new(MessageBuffer)
 	copy(mb.ne[:], in[:32])
-	mb.ciphertext = in[32:]
+	mb.ns = in[32:80]
+	mb.ciphertext = in[80:]
 	//log.Debug("XX_Decode0", "mb", mb)
 
 	return mb, nil
 }
 
 // Decodes messages at stage 1 or 2 into MessageBuffer
-func Decode1(in []byte) (*MessageBuffer, error) {
-	if len(in) < 80 {
-		return nil, errors.New("cannot decode stage 1/2 MessageBuffer: length less than 96 bytes")
-	}
+// func Decode1(in []byte) (*MessageBuffer, error) {
+// 	if len(in) < 80 {
+// 		return nil, errors.New("cannot decode stage 1/2 MessageBuffer: length less than 96 bytes")
+// 	}
 
-	// log.Debug("XX_Decode1", "in", in)
-	// log.Debug("XX_Decode1", "ns", in[32:80])
+// 	// log.Debug("XX_Decode1", "in", in)
+// 	// log.Debug("XX_Decode1", "ns", in[32:80])
 
-	mb := new(MessageBuffer)
-	copy(mb.ne[:], in[:32])
-	mb.ns = in[32:80]
-	mb.ciphertext = in[80:]
-	// copy(mb.ns,)
-	// copy(mb.ciphertext,)
+// 	mb := new(MessageBuffer)
+// 	copy(mb.ne[:], in[:32])
+// 	mb.ns = in[32:80]
+// 	mb.ciphertext = in[80:]
+// 	// copy(mb.ns,)
+// 	// copy(mb.ciphertext,)
 
-	return mb, nil
-}
+// 	return mb, nil
+// }
 
 func validatePublicKey(k []byte) bool {
 	forbiddenCurveValues := [12][]byte{
@@ -209,15 +238,15 @@ func dh(private_key [32]byte, public_key [32]byte) [32]byte {
 	return ss
 }
 
-func generateKeypair() keypair {
+func GenerateKeypair() Keypair {
 	var public_key [32]byte
 	var private_key [32]byte
 	_, _ = rand.Read(private_key[:])
 	curve25519.ScalarBaseMult(&public_key, &private_key)
 	if validatePublicKey(public_key[:]) {
-		return keypair{public_key, private_key}
+		return Keypair{public_key, private_key}
 	}
-	return generateKeypair()
+	return GenerateKeypair()
 }
 
 func generatePublicKey(private_key [32]byte) [32]byte {
@@ -376,9 +405,9 @@ func split(ss *symmetricstate) (cipherstate, cipherstate) {
 
 /* HandshakeState */
 
-func initializeInitiator(prologue []byte, s keypair, rs [32]byte, psk [32]byte) handshakestate {
+func initializeInitiator(prologue []byte, s Keypair, rs [32]byte, psk [32]byte) handshakestate {
 	var ss symmetricstate
-	var e keypair
+	var e Keypair
 	var re [32]byte
 	name := []byte("Noise_IK_25519_ChaChaPoly_BLAKE2s")
 	ss = initializeSymmetric(name)
@@ -387,9 +416,9 @@ func initializeInitiator(prologue []byte, s keypair, rs [32]byte, psk [32]byte) 
 	return handshakestate{ss, s, e, rs, re, psk}
 }
 
-func initializeResponder(prologue []byte, s keypair, rs [32]byte, psk [32]byte) handshakestate {
+func initializeResponder(prologue []byte, s Keypair, rs [32]byte, psk [32]byte) handshakestate {
 	var ss symmetricstate
-	var e keypair
+	var e Keypair
 	var re [32]byte
 	name := []byte("Noise_IK_25519_ChaChaPoly_BLAKE2s")
 	ss = initializeSymmetric(name)
@@ -400,7 +429,7 @@ func initializeResponder(prologue []byte, s keypair, rs [32]byte, psk [32]byte) 
 
 func writeMessageA(hs *handshakestate, payload []byte) (*handshakestate, MessageBuffer) {
 	ne, ns, ciphertext := emptyKey, []byte{}, []byte{}
-	hs.e = generateKeypair()
+	hs.e = GenerateKeypair()
 	ne = hs.e.public_key
 	mixHash(&hs.ss, ne[:])
 	/* No PSK, so skipping mixKey */
@@ -416,7 +445,7 @@ func writeMessageA(hs *handshakestate, payload []byte) (*handshakestate, Message
 
 func writeMessageB(hs *handshakestate, payload []byte) ([32]byte, MessageBuffer, cipherstate, cipherstate) {
 	ne, ns, ciphertext := emptyKey, []byte{}, []byte{}
-	hs.e = generateKeypair()
+	hs.e = GenerateKeypair()
 	ne = hs.e.public_key
 	mixHash(&hs.ss, ne[:])
 	/* No PSK, so skipping mixKey */
@@ -463,7 +492,7 @@ func readMessageB(hs *handshakestate, message *MessageBuffer) ([32]byte, []byte,
  * PROCESSES                                                        *
  * ---------------------------------------------------------------- */
 
-func InitSession(initiator bool, prologue []byte, s keypair, rs [32]byte) *NoiseSession {
+func InitSession(initiator bool, prologue []byte, s Keypair, rs [32]byte) *NoiseSession {
 	var session NoiseSession
 	psk := emptyKey
 	if initiator {
