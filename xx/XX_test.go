@@ -28,7 +28,7 @@ func TestGetHkdf(t *testing.T) {
 	t.Logf("%x", c)
 }
 
-func TestHandshake(t *testing.T) {
+func doHandshake(t *testing.T) (*NoiseSession, *NoiseSession) {
 	// generate local static noise key
 	kp_init := GenerateKeypair()
 	kp_resp := GenerateKeypair()
@@ -142,4 +142,52 @@ func TestHandshake(t *testing.T) {
 
 	t.Logf("stage 2 resp payload: %x", plaintext)
 
+	return ns_init, ns_resp
+}
+
+func TestHandshake(t *testing.T) {
+	_, _ = doHandshake(t)
+}
+
+func TestSymmetricEncryptAndDecrypt(t *testing.T) {
+	ns_init, ns_resp := doHandshake(t)
+	cs1_init := ns_init.CS1()
+	cs1_resp := ns_resp.CS1()
+
+	var out []byte
+	var ok bool
+	ad := []byte("authenticated")
+	msg := []byte("helloworld")
+	cs1_init, out = encryptWithAd(cs1_init, ad, msg)
+
+	cs1_resp, out, ok = decryptWithAd(cs1_resp, ad, out)
+	if !ok {
+		t.Fatal("could not decrypt")
+	}
+}
+
+func TestSymmetricEncryptAndDecryptAgain(t *testing.T) {
+	ns_init, ns_resp := doHandshake(t)
+	cs2_init := ns_init.CS2()
+	cs2_resp := ns_resp.CS2()
+
+	var out []byte
+	var ok bool
+	ad := []byte("authenticated")
+	msg := []byte("helloworld")
+	cs2_resp, out = encryptWithAd(cs2_resp, ad, msg)
+
+	cs2_init, out, ok = decryptWithAd(cs2_init, ad, out)
+	if !ok {
+		t.Fatal("could not decrypt")
+	}
+
+	ad = []byte("authenticatedagain")
+	msg = []byte("helloworld2")
+	cs2_resp, out = encryptWithAd(cs2_resp, ad, msg)
+
+	cs2_init, out, ok = decryptWithAd(cs2_init, ad, out)
+	if !ok {
+		t.Fatal("could not decrypt")
+	}
 }

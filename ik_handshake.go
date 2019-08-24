@@ -5,7 +5,6 @@ import (
 	"fmt"
 	log "github.com/ChainSafe/log15"
 	proto "github.com/gogo/protobuf/proto"
-	//"github.com/libp2p/go-libp2p-core/peer"
 
 	ik "github.com/ChainSafe/go-libp2p-noise/ik"
 	pb "github.com/ChainSafe/go-libp2p-noise/pb"

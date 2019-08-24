@@ -73,6 +73,14 @@ type NoiseSession struct {
 	i   bool
 }
 
+func (ns *NoiseSession) CS1() *cipherstate {
+	return &ns.cs1
+}
+
+func (ns *NoiseSession) CS2() *cipherstate {
+	return &ns.cs2
+}
+
 func NewKeypair(pub [32]byte, priv [32]byte) Keypair {
 	return Keypair{
 		public_key:  pub,
@@ -532,7 +540,7 @@ func SendMessage(session *NoiseSession, message []byte) (*NoiseSession, MessageB
 	}
 	if session.mc == 2 {
 		session.h, messageBuffer, session.cs1, session.cs2 = writeMessageC(&session.hs, message)
-		session.hs = handshakestate{}
+		//session.hs = handshakestate{}
 	}
 	session.mc = session.mc + 1
 	return session, messageBuffer
@@ -549,7 +557,7 @@ func RecvMessage(session *NoiseSession, message *MessageBuffer) (*NoiseSession, 
 	}
 	if session.mc == 2 {
 		session.h, plaintext, valid, session.cs1, session.cs2 = readMessageC(&session.hs, message)
-		session.hs = handshakestate{}
+		//session.hs = handshakestate{}
 	}
 	session.mc = session.mc + 1
 	return session, plaintext, valid

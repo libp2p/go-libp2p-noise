@@ -126,9 +126,7 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 	if s.noiseStaticKeyCache[s.remotePeer] != [32]byte{} && s.noisePipesSupport {
 		log.Debug("runHandshake_ik")
 
-		// ******************************************** //
 		// known static key for peer, try IK  //
-		// ******************************************** //
 
 		_, err := s.runHandshake_ik(ctx, nil)
 		if err != nil {
@@ -142,9 +140,8 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 		}
 
 	} else {
-		// ******************************************** //
+
 		// unknown static key for peer, try XX //
-		// ******************************************** //
 
 		handshakeData, err := s.runHandshake_xx(ctx, false, nil)
 		if err != nil {
