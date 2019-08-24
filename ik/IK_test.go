@@ -50,7 +50,7 @@ func TestHandshake(t *testing.T) {
 	ns_init := InitSession(true, prologue, kp_init, kp_resp.PubKey())
 
 	// responder: new IK noise session
-	ns_resp := InitSession(false, prologue, kp_resp, kp_init.PubKey())
+	ns_resp := InitSession(false, prologue, kp_resp, [32]byte{})
 
 	// stage 0: initiator
 	// create payload
