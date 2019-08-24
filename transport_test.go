@@ -149,7 +149,7 @@ func TestKeys(t *testing.T) {
 }
 
 // Tests XX handshake
-func TestHandshakeXX(t *testing.T) {
+func TestHandshake_XX(t *testing.T) {
 	initTransport := newTestTransport(t, crypto.Ed25519, 2048)
 	respTransport := newTestTransport(t, crypto.Ed25519, 2048)
 

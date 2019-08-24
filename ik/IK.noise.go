@@ -80,12 +80,17 @@ func (ns *NoiseSession) CS2() *cipherstate {
 	return &ns.cs2
 }
 
+func (ns *NoiseSession) Ephemeral() *Keypair {
+	return &ns.hs.e
+}
+
 func NewKeypair(pub [32]byte, priv [32]byte) Keypair {
 	return Keypair{
 		public_key:  pub,
 		private_key: priv,
 	}
 }
+
 
 func (kp Keypair) PubKey() [32]byte {
 	return kp.public_key
