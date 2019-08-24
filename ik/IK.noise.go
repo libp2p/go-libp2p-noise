@@ -151,19 +151,18 @@ func (mb *MessageBuffer) Encode0() []byte {
 	return enc
 }
 
-// Encodes a MessageBuffer from stage 1 and 2
-// func (mb *MessageBuffer) Encode1() []byte {
-// 	enc := []byte{}
+// Encodes a MessageBuffer from stage 1
+func (mb *MessageBuffer) Encode1() []byte {
+	enc := []byte{}
 
-// 	enc = append(enc, mb.ne[:]...)
-// 	enc = append(enc, mb.ns...)
-// 	enc = append(enc, mb.ciphertext...)
+	enc = append(enc, mb.ne[:]...)
+	enc = append(enc, mb.ciphertext...)
 
-// 	// log.Debug("XX_Encode1", "ne", mb.ne)
-// 	// log.Debug("XX_Encode1", "ns", mb.ns)
+	// log.Debug("XX_Encode1", "ne", mb.ne)
+	// log.Debug("XX_Encode1", "ns", mb.ns)
 
-// 	return enc
-// }
+	return enc
+}
 
 // Decodes initial message (stage 0) into MessageBuffer
 func Decode0(in []byte) (*MessageBuffer, error) {
@@ -181,24 +180,24 @@ func Decode0(in []byte) (*MessageBuffer, error) {
 	return mb, nil
 }
 
-// Decodes messages at stage 1 or 2 into MessageBuffer
-// func Decode1(in []byte) (*MessageBuffer, error) {
-// 	if len(in) < 80 {
-// 		return nil, errors.New("cannot decode stage 1/2 MessageBuffer: length less than 96 bytes")
-// 	}
+// Decodes messages at stage 1 into MessageBuffer
+func Decode1(in []byte) (*MessageBuffer, error) {
+	if len(in) < 80 {
+		return nil, errors.New("cannot decode stage 1/2 MessageBuffer: length less than 96 bytes")
+	}
 
-// 	// log.Debug("XX_Decode1", "in", in)
-// 	// log.Debug("XX_Decode1", "ns", in[32:80])
+	// log.Debug("XX_Decode1", "in", in)
+	// log.Debug("XX_Decode1", "ns", in[32:80])
 
-// 	mb := new(MessageBuffer)
-// 	copy(mb.ne[:], in[:32])
-// 	mb.ns = in[32:80]
-// 	mb.ciphertext = in[80:]
-// 	// copy(mb.ns,)
-// 	// copy(mb.ciphertext,)
+	mb := new(MessageBuffer)
+	copy(mb.ne[:], in[:32])
+	//mb.ns = in[32:80]
+	mb.ciphertext = in[32:]
+	// copy(mb.ns,)
+	// copy(mb.ciphertext,)
 
-// 	return mb, nil
-// }
+	return mb, nil
+}
 
 func validatePublicKey(k []byte) bool {
 	forbiddenCurveValues := [12][]byte{

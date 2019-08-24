@@ -88,7 +88,7 @@ func (s *secureSession) runHandshake_xx(ctx context.Context, fallback bool, msg 
 	if s.noisePrivateKey == [32]byte{} {
 		// generate local static noise key
 		kp = xx.GenerateKeypair()
-		s.noisePrivateKey = kp.PrivKey()	
+		s.noisePrivateKey = kp.PrivKey()
 	} else {
 		pub := xx.GeneratePublicKey(s.noisePrivateKey)
 		kp = xx.NewKeypair(pub, s.noisePrivateKey)

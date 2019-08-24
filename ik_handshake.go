@@ -11,18 +11,18 @@ import (
 	pb "github.com/ChainSafe/go-libp2p-noise/pb"
 )
 
-func (s *secureSession) ik_sendHandshakeMessage(payload []byte) error {
+func (s *secureSession) ik_sendHandshakeMessage(payload []byte, initial_stage bool) error {
 	log.Debug("ik_sendHandshakeMessage", "initiator", s.initiator, "payload", payload, "payload len", len(payload))
 
 	// create send message w payload
 	var msgbuf ik.MessageBuffer
 	s.ik_ns, msgbuf = ik.SendMessage(s.ik_ns, payload)
 	var encMsgBuf []byte
-	//if initial_stage {
-	encMsgBuf = msgbuf.Encode0()
-	// } else {
-	// 	encMsgBuf = msgbuf.Encode1()
-	// }
+	if initial_stage {
+		encMsgBuf = msgbuf.Encode0()
+	} else {
+		encMsgBuf = msgbuf.Encode1()
+	}
 
 	log.Debug("ik_sendHandshakeMessage", "initiator", s.initiator, "msgbuf", msgbuf)
 	log.Debug("ik_sendHandshakeMessage", "initiator", s.initiator, "encMsgBuf", encMsgBuf, "ns_len", len(msgbuf.NS()), "enc_len", len(encMsgBuf))
@@ -43,7 +43,7 @@ func (s *secureSession) ik_sendHandshakeMessage(payload []byte) error {
 	return nil
 }
 
-func (s *secureSession) ik_recvHandshakeMessage() (buf []byte, plaintext []byte, valid bool, err error) {
+func (s *secureSession) ik_recvHandshakeMessage(initial_stage bool) (buf []byte, plaintext []byte, valid bool, err error) {
 	l, err := s.ReadLength()
 	if err != nil {
 		return nil, nil, false, fmt.Errorf("read length fail: %s", err)
@@ -57,11 +57,11 @@ func (s *secureSession) ik_recvHandshakeMessage() (buf []byte, plaintext []byte,
 	}
 
 	var msgbuf *ik.MessageBuffer
-	//if initial_stage {
-	msgbuf, err = ik.Decode0(buf)
-	// } else {
-	// 	msgbuf, err = ik.Decode1(buf)
-	// }
+	if initial_stage {
+		msgbuf, err = ik.Decode0(buf)
+	} else {
+		msgbuf, err = ik.Decode1(buf)
+	}
 
 	log.Debug("ik_recvHandshakeMessage", "initiator", s.initiator, "msgbuf", msgbuf, "buf len", len(buf))
 
@@ -87,7 +87,7 @@ func (s *secureSession) runHandshake_ik(ctx context.Context, handshakeData []byt
 
 	if s.noisePrivateKey == [32]byte{} {
 		// generate local static noise key
-		kp = ik.GenerateKeypair()	
+		kp = ik.GenerateKeypair()
 		s.noisePrivateKey = kp.PrivKey()
 	} else {
 		pub := ik.GeneratePublicKey(s.noisePrivateKey)
@@ -126,13 +126,49 @@ func (s *secureSession) runHandshake_ik(ctx context.Context, handshakeData []byt
 
 	if s.initiator {
 		// stage 0 //
-		err := s.ik_sendHandshakeMessage(payloadEnc)
+		err := s.ik_sendHandshakeMessage(payloadEnc, true)
 		if err != nil {
 			log.Error("stage 0 initiator send", "err", err)
 			return nil, fmt.Errorf("stage 0 initiator fail: %s", err)
 		}
 
 		// stage 1 //
+
+		// read message
+		buf, plaintext, valid, err := s.ik_recvHandshakeMessage(false)
+		if err != nil {
+			return buf, fmt.Errorf("stage 1 initiator fail: %s", err)
+		}
+
+		if !valid {
+			return buf, fmt.Errorf("stage 1 initiator validation fail")
+		}
+
+		// unmarshal payload
+		nhp := new(pb.NoiseHandshakePayload)
+		err = proto.Unmarshal(plaintext, nhp)
+		if err != nil {
+			return buf, fmt.Errorf("stage 1 initiator validation fail: cannot unmarshal payload")
+		}
+
+		// set remote libp2p public key
+		err = s.setRemotePeerInfo(nhp.GetLibp2PKey())
+		if err != nil {
+			log.Error("stage 1 initiator set remote peer info", "err", err)
+			return buf, fmt.Errorf("stage 1 initiator read remote libp2p key fail")
+		}
+
+		// assert that remote peer ID matches libp2p key
+		err = s.setRemotePeerID(s.RemotePublicKey())
+		if err != nil {
+			log.Error("stage 1 initiator set remote peer id", "err", err)
+		}
+
+		// verify payload is signed by libp2p key
+		err = s.verifyPayload(nhp, s.noiseStaticKeyCache[s.remotePeer])
+		if err != nil {
+			log.Error("stage 1 initiator verify payload", "err", err)
+		}
 
 	} else {
 		// stage 0 //
@@ -155,7 +191,7 @@ func (s *secureSession) runHandshake_ik(ctx context.Context, handshakeData []byt
 			s.ik_ns, plaintext, valid = ik.RecvMessage(s.ik_ns, msgbuf)
 		} else {
 			// read message
-			buf, plaintext, valid, err = s.ik_recvHandshakeMessage()
+			buf, plaintext, valid, err = s.ik_recvHandshakeMessage(true)
 			if err != nil {
 				return buf, fmt.Errorf("stage 0 responder fail: %s", err)
 			}
@@ -192,6 +228,14 @@ func (s *secureSession) runHandshake_ik(ctx context.Context, handshakeData []byt
 		err = s.verifyPayload(nhp, s.ik_ns.RemoteKey())
 		if err != nil {
 			log.Error("stage 1 responder verify payload", "err", err)
+		}
+
+		// stage 1 //
+
+		err := s.ik_sendHandshakeMessage(payloadEnc, false)
+		if err != nil {
+			log.Error("stage 1 responder send", "err", err)
+			return nil, fmt.Errorf("stage 1 responder fail: %s", err)
 		}
 
 	}
