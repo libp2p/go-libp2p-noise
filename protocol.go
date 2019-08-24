@@ -51,7 +51,11 @@ type peerInfo struct {
 }
 
 // newSecureSession creates a noise session that can be configured to be initialized with a static
-// noise key `noisePrivateKey`, a cache of previous
+// noise key `noisePrivateKey`, a cache of previous peer noise keys `noiseStaticKeyCache`, an
+// option `noisePipesSupport` to turn on or off noise pipes
+//
+// With noise pipes off, we always do XX
+// With noise pipes on, we first try IK, if that fails, move to XXfallback
 func newSecureSession(ctx context.Context, local peer.ID, privKey crypto.PrivKey, noisePrivateKey [32]byte,
 	insecure net.Conn, remote peer.ID, noiseStaticKeyCache map[peer.ID]([32]byte),
 	noisePipesSupport bool, initiator bool) (*secureSession, error) {
@@ -85,13 +89,13 @@ func (s *secureSession) NoisePrivateKey() [32]byte {
 	return s.noisePrivateKey
 }
 
-func (s *secureSession) ReadLength() (int, error) {
+func (s *secureSession) readLength() (int, error) {
 	buf := make([]byte, 2)
 	_, err := s.insecure.Read(buf)
 	return int(binary.BigEndian.Uint16(buf)), err
 }
 
-func (s *secureSession) WriteLength(length int) error {
+func (s *secureSession) writeLength(length int) error {
 	buf := make([]byte, 2)
 	binary.BigEndian.PutUint16(buf, uint16(length))
 	_, err := s.insecure.Write(buf)
@@ -187,7 +191,7 @@ func (s *secureSession) Read(buf []byte) (int, error) {
 }
 
 func (s *secureSession) ReadSecure() ([]byte, error) {
-	l, err := s.ReadLength()
+	l, err := s.readLength()
 	if err != nil {
 		return nil, err
 	}
@@ -236,7 +240,7 @@ func (s *secureSession) WriteSecure(in []byte) error {
 		return err
 	}
 
-	err = s.WriteLength(len(ciphertext))
+	err = s.writeLength(len(ciphertext))
 	if err != nil {
 		return err
 	}

@@ -24,7 +24,7 @@ func (s *secureSession) ik_sendHandshakeMessage(payload []byte, initial_stage bo
 
 	log.Debugf("ik_sendHandshakeMessage", "initiator", s.initiator, "msgbuf", msgbuf)
 
-	err := s.WriteLength(len(encMsgBuf))
+	err := s.writeLength(len(encMsgBuf))
 	if err != nil {
 		log.Error("xx_sendHandshakeMessage", "initiator", s.initiator, "error", err)
 		return fmt.Errorf("xx_sendHandshakeMessage write length fail: %s", err)
@@ -41,7 +41,7 @@ func (s *secureSession) ik_sendHandshakeMessage(payload []byte, initial_stage bo
 }
 
 func (s *secureSession) ik_recvHandshakeMessage(initial_stage bool) (buf []byte, plaintext []byte, valid bool, err error) {
-	l, err := s.ReadLength()
+	l, err := s.readLength()
 	if err != nil {
 		return nil, nil, false, fmt.Errorf("read length fail: %s", err)
 	}
