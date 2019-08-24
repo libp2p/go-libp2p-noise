@@ -6,6 +6,7 @@ import (
 	"net"
 	"testing"
 
+	//ik "github.com/ChainSafe/go-libp2p-noise/ik"
 	crypto "github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/sec"
@@ -173,16 +174,55 @@ func TestHandshakeXX(t *testing.T) {
 	}
 }
 
-// Test noise pipes
+// Test IK handshake
 func TestHandshakeIK(t *testing.T) {
-	initTransport := newTestTransportPipes(t, crypto.Ed25519, 2048)
-	respTransport := newTestTransportPipes(t, crypto.Ed25519, 2048)
+	initTransport := newTestTransport(t, crypto.Ed25519, 2048)
+	respTransport := newTestTransport(t, crypto.Ed25519, 2048)
 
+	// do initial XX handshake
 	initConn, respConn := connect(t, initTransport, respTransport)
 	initConn.Close()
 	respConn.Close()
 
+	// turn on pipes, this will turn on IK
+	initTransport.NoisePipesSupport = true
+	respTransport.NoisePipesSupport = true
+
+	// add responder's static key to initiator's key cache
+	keycache := make(map[peer.ID]([32]byte))
+	keycache[respTransport.LocalID] = respTransport.NoisePublicKey
+	initTransport.NoiseStaticKeyCache = keycache
+
+	// do IK handshake
 	initConn, respConn = connect(t, initTransport, respTransport)
+	defer initConn.Close()
+	defer respConn.Close()
+
+	before := []byte("hello world")
+	_, err := initConn.Write(before)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	after := make([]byte, len(before))
+	_, err = respConn.Read(after)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !bytes.Equal(before, after) {
+		t.Errorf("Message mismatch. %v != %v", before, after)
+	}
+}
+
+// Test noise pipes
+func TestHandshakeXXfallback(t *testing.T) {
+	initTransport := newTestTransportPipes(t, crypto.Ed25519, 2048)
+	respTransport := newTestTransportPipes(t, crypto.Ed25519, 2048)
+
+	// turning on pipes causes it to default to IK, but since we haven't already
+	// done a handshake, it'll fallback to XX
+	initConn, respConn := connect(t, initTransport, respTransport)
 	defer initConn.Close()
 	defer respConn.Close()
 

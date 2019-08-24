@@ -19,6 +19,7 @@ type Transport struct {
 	NoisePipesSupport   bool
 	NoiseStaticKeyCache map[peer.ID]([32]byte)
 	NoisePrivateKey     [32]byte
+	NoisePublicKey      [32]byte
 }
 
 // SecureInbound runs noise handshake as the responder
@@ -30,6 +31,7 @@ func (t *Transport) SecureInbound(ctx context.Context, insecure net.Conn) (sec.S
 
 	t.NoiseStaticKeyCache = s.NoiseStaticKeyCache()
 	t.NoisePrivateKey = s.NoisePrivateKey()
+	t.NoisePublicKey = s.local.noiseKey
 	return s, nil
 }
 
@@ -42,5 +44,6 @@ func (t *Transport) SecureOutbound(ctx context.Context, insecure net.Conn, p pee
 
 	t.NoiseStaticKeyCache = s.NoiseStaticKeyCache()
 	t.NoisePrivateKey = s.NoisePrivateKey()
+	t.NoisePublicKey = s.local.noiseKey
 	return s, nil
 }

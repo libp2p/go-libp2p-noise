@@ -17,11 +17,11 @@ func (s *secureSession) ik_sendHandshakeMessage(payload []byte, initial_stage bo
 	var msgbuf ik.MessageBuffer
 	s.ik_ns, msgbuf = ik.SendMessage(s.ik_ns, payload)
 	var encMsgBuf []byte
-	//if initial_stage {
-	encMsgBuf = msgbuf.Encode0()
-	// } else {
-	// 	encMsgBuf = msgbuf.Encode1()
-	// }
+	if initial_stage {
+		encMsgBuf = msgbuf.Encode0()
+	} else {
+		encMsgBuf = msgbuf.Encode1()
+	}
 
 	log.Debug("ik_sendHandshakeMessage", "initiator", s.initiator, "msgbuf", msgbuf)
 	log.Debug("ik_sendHandshakeMessage", "initiator", s.initiator, "encMsgBuf", encMsgBuf, "ns_len", len(msgbuf.NS()), "enc_len", len(encMsgBuf))
@@ -56,11 +56,11 @@ func (s *secureSession) ik_recvHandshakeMessage(initial_stage bool) (buf []byte,
 	}
 
 	var msgbuf *ik.MessageBuffer
-	//if initial_stage {
-	msgbuf, err = ik.Decode0(buf)
-	// } else {
-	// 	msgbuf, err = ik.Decode1(buf)
-	// }
+	if initial_stage {
+		msgbuf, err = ik.Decode0(buf)
+	} else {
+		msgbuf, err = ik.Decode1(buf)
+	}
 
 	log.Debug("ik_recvHandshakeMessage", "initiator", s.initiator, "msgbuf", msgbuf, "buf len", len(buf))
 
@@ -93,7 +93,9 @@ func (s *secureSession) runHandshake_ik(ctx context.Context) ([]byte, error) {
 		kp = ik.NewKeypair(pub, s.noisePrivateKey)
 	}
 
-	log.Debug("ik handshake", "pubkey", kp.PubKey())
+	s.local.noiseKey = kp.PubKey()
+
+	log.Debug("ik handshake", "noise pubkey", kp.PubKey())
 
 	// setup libp2p keys
 	localKeyRaw, err := s.LocalPublicKey().Bytes()
@@ -101,7 +103,7 @@ func (s *secureSession) runHandshake_ik(ctx context.Context) ([]byte, error) {
 		return nil, fmt.Errorf("err getting raw pubkey: %s", err)
 	}
 
-	log.Debug("ik handshake", "local key", localKeyRaw, "len", len(localKeyRaw))
+	log.Debug("ik handshake", "local libp2p key", localKeyRaw, "len", len(localKeyRaw))
 
 	// sign noise data for payload
 	noise_pub := kp.PubKey()

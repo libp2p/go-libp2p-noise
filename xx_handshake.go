@@ -94,6 +94,8 @@ func (s *secureSession) runHandshake_xx(ctx context.Context, fallback bool, init
 		kp = xx.NewKeypair(pub, s.noisePrivateKey)
 	}
 
+	s.local.noiseKey = kp.PubKey()
+
 	log.Debug("xx handshake", "pubkey", kp.PubKey(), "initiator", s.initiator)
 
 	// setup libp2p keys
