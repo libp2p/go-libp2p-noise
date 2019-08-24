@@ -9,19 +9,41 @@ import (
 	"github.com/libp2p/go-libp2p-core/sec"
 )
 
-const ID = "/noise/0.0.0"
+const ID = "/noise/0.0.1"
+
+var _ sec.SecureTransport = &Transport{}
 
 type Transport struct {
-	LocalID    peer.ID
-	PrivateKey crypto.PrivKey
+	LocalID             peer.ID
+	PrivateKey          crypto.PrivKey
+	NoisePipesSupport   bool
+	NoiseStaticKeyCache map[peer.ID]([32]byte)
+	NoisePrivateKey     [32]byte
+	NoisePublicKey      [32]byte
 }
 
-// SecureInbound runs noise handshake as a server
+// SecureInbound runs noise handshake as the responder
 func (t *Transport) SecureInbound(ctx context.Context, insecure net.Conn) (sec.SecureConn, error) {
-	return newSecureSession(ctx, t.LocalID, t.PrivateKey, insecure, "", false)
+	s, err := newSecureSession(ctx, t.LocalID, t.PrivateKey, t.NoisePrivateKey, insecure, "", t.NoiseStaticKeyCache, t.NoisePipesSupport, false)
+	if err != nil {
+		return s, err
+	}
+
+	t.NoiseStaticKeyCache = s.NoiseStaticKeyCache()
+	t.NoisePrivateKey = s.NoisePrivateKey()
+	t.NoisePublicKey = s.local.noiseKey
+	return s, nil
 }
 
-// SecureOutbound runs noise handshake as a client
+// SecureOutbound runs noise handshake as the initiator
 func (t *Transport) SecureOutbound(ctx context.Context, insecure net.Conn, p peer.ID) (sec.SecureConn, error) {
-	return newSecureSession(ctx, t.LocalID, t.PrivateKey, insecure, p, true)
+	s, err := newSecureSession(ctx, t.LocalID, t.PrivateKey, t.NoisePrivateKey, insecure, p, t.NoiseStaticKeyCache, t.NoisePipesSupport, true)
+	if err != nil {
+		return s, err
+	}
+
+	t.NoiseStaticKeyCache = s.NoiseStaticKeyCache()
+	t.NoisePrivateKey = s.NoisePrivateKey()
+	t.NoisePublicKey = s.local.noiseKey
+	return s, nil
 }

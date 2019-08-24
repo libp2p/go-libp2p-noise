@@ -2,18 +2,26 @@ package noise
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
+	//"io"
 	"net"
 	"time"
 
-	proto "github.com/gogo/protobuf/proto"
+	logging "github.com/ipfs/go-log"
+	//proto "github.com/gogo/protobuf/proto"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-core/sec"
+	//"github.com/libp2p/go-libp2p-core/sec"
 
+	ik "github.com/ChainSafe/go-libp2p-noise/ik"
 	pb "github.com/ChainSafe/go-libp2p-noise/pb"
 	xx "github.com/ChainSafe/go-libp2p-noise/xx"
 )
+
+var log = logging.Logger("noise")
+
+const payload_string = "noise-libp2p-static-key:"
 
 type secureSession struct {
 	insecure net.Conn
@@ -27,74 +35,134 @@ type secureSession struct {
 
 	local  peerInfo
 	remote peerInfo
+
+	xx_ns *xx.NoiseSession
+	ik_ns *ik.NoiseSession
+
+	xx_complete bool
+	ik_complete bool
+
+	noisePipesSupport   bool
+	noiseStaticKeyCache map[peer.ID]([32]byte)
+
+	noisePrivateKey [32]byte
 }
 
-func newSecureSession(ctx context.Context, local peer.ID, privKey crypto.PrivKey, insecure net.Conn, remote peer.ID, initiator bool) (sec.SecureConn, error) {
+type peerInfo struct {
+	noiseKey  [32]byte // static noise key
+	libp2pKey crypto.PubKey
+}
 
-	s := &secureSession{
-		insecure:   insecure,
-		initiator:  initiator,
-		prologue:   []byte(ID),
-		localKey:   privKey,
-		localPeer:  local,
-		remotePeer: remote,
+func newSecureSession(ctx context.Context, local peer.ID, privKey crypto.PrivKey, noisePrivateKey [32]byte,
+	insecure net.Conn, remote peer.ID, noiseStaticKeyCache map[peer.ID]([32]byte),
+	noisePipesSupport bool, initiator bool) (*secureSession, error) {
+
+	if noiseStaticKeyCache == nil {
+		noiseStaticKeyCache = make(map[peer.ID]([32]byte))
 	}
 
-	return s, nil
+	s := &secureSession{
+		insecure:            insecure,
+		initiator:           initiator,
+		prologue:            []byte(ID),
+		localKey:            privKey,
+		localPeer:           local,
+		remotePeer:          remote,
+		noisePipesSupport:   noisePipesSupport,
+		noiseStaticKeyCache: noiseStaticKeyCache,
+		noisePrivateKey:     noisePrivateKey,
+	}
+
+	err := s.runHandshake(ctx)
+
+	return s, err
+}
+
+func (s *secureSession) NoiseStaticKeyCache() map[peer.ID]([32]byte) {
+	return s.noiseStaticKeyCache
+}
+
+func (s *secureSession) NoisePrivateKey() [32]byte {
+	return s.noisePrivateKey
+}
+
+func (s *secureSession) ReadLength() (int, error) {
+	buf := make([]byte, 2)
+	_, err := s.insecure.Read(buf)
+	return int(binary.BigEndian.Uint16(buf)), err
+}
+
+func (s *secureSession) WriteLength(length int) error {
+	buf := make([]byte, 2)
+	binary.BigEndian.PutUint16(buf, uint16(length))
+	_, err := s.insecure.Write(buf)
+	return err
+}
+
+func (s *secureSession) setRemotePeerInfo(key []byte) (err error) {
+	s.remote.libp2pKey, err = crypto.UnmarshalPublicKey(key)
+	return err
+}
+
+func (s *secureSession) setRemotePeerID(key crypto.PubKey) (err error) {
+	s.remotePeer, err = peer.IDFromPublicKey(key)
+	return err
+}
+
+func (s *secureSession) verifyPayload(payload *pb.NoiseHandshakePayload, noiseKey [32]byte) (err error) {
+	sig := payload.GetNoiseStaticKeySignature()
+	msg := append([]byte(payload_string), noiseKey[:]...)
+
+	log.Debugf("verifyPayload", "msg", fmt.Sprintf("%x", msg))
+
+	ok, err := s.RemotePublicKey().Verify(msg, sig)
+	if err != nil {
+		return err
+	} else if !ok {
+		return fmt.Errorf("did not verify payload")
+	}
+
+	return nil
 }
 
 func (s *secureSession) runHandshake(ctx context.Context) error {
 
-	// TODO: check if static key for peer exists
-	// if so, do XX; otherwise do IK
+	log.Debugf("runHandshake", "cache", s.noiseStaticKeyCache)
 
-	// PHASE 1: TRY XX
+	// if we have the peer's noise static key and we support noise pipes, we can try IK
+	if s.noiseStaticKeyCache[s.remotePeer] != [32]byte{} || s.noisePipesSupport {
+		log.Debugf("runHandshake_ik")
 
-	// get remote static key
-	remotePub := [32]byte{}
-	remotePubRaw, err := s.RemotePublicKey().Raw()
-	if err != nil {
-		return fmt.Errorf("remote pubkey fail: %s", err)
-	}
-	copy(remotePub[:], remotePubRaw)
+		// known static key for peer, try IK  //
 
-	// generate local static noise key
-	kp := xx.GenerateKeypair()
-
-	// new XX noise session
-	ns := xx.InitSession(s.initiator, s.prologue, kp, remotePub)
-
-	// send initial payload message
-	if s.initiator {
-		// create payload
-		payload := new(pb.NoiseHandshakePayload)
-		msg, err := proto.Marshal(payload)
+		buf, err := s.runHandshake_ik(ctx)
 		if err != nil {
-			return fmt.Errorf("proto marshal payload fail: %s", err)
+			log.Error("runHandshake_ik", "err", err)
+
+			// TODO: PIPE TO XX
+
+			err = s.runHandshake_xx(ctx, true, buf)
+			if err != nil {
+				log.Error("runHandshake_xx", "err", err)
+				return fmt.Errorf("runHandshake_xx err %s", err)
+			}
+
+			s.xx_complete = true
 		}
 
-		var msgbuf xx.MessageBuffer
-		ns, msgbuf = xx.SendMessage(ns, msg)
+		s.ik_complete = true
 
-		encMsgBuf := msgbuf.Encode0()
-		if len(encMsgBuf) != 56 {
-			return fmt.Errorf("enc msg buf: len does not equal 56")
-		}
+	} else {
 
-		_, err = s.insecure.Write(encMsgBuf)
+		// unknown static key for peer, try XX //
+
+		err := s.runHandshake_xx(ctx, false, nil)
 		if err != nil {
-			return fmt.Errorf("write to conn fail: %s", err)
+			log.Error("runHandshake_xx", "err", err)
+			return err
 		}
 
-		// 	buf := make([]byte, 144)
-		// 	_, err = s.insecure.Read(buf)
-		// 	if err != nil {
-		// 		return fmt.Errorf("read from conn fail: %s", err)
-		// 	}
-
-		// 	var plaintext []byte
-		// 	var valid bool
-		// 	ns, plaintext, valid = xx.RecvMessage(ns, )
+		s.xx_complete = true
 	}
 
 	return nil
@@ -112,8 +180,36 @@ func (s *secureSession) LocalPrivateKey() crypto.PrivKey {
 	return s.localKey
 }
 
-func (s *secureSession) Read(in []byte) (int, error) {
-	return s.insecure.Read(in)
+func (s *secureSession) LocalPublicKey() crypto.PubKey {
+	return s.localKey.GetPublic()
+}
+
+func (s *secureSession) Read(buf []byte) (int, error) {
+	// TODO: use noise symmetric keys
+	return s.insecure.Read(buf)
+
+	plaintext, err := s.ReadSecure()
+	if err != nil {
+		return 0, nil
+	}
+
+	copy(buf, plaintext)
+	return len(buf), nil
+}
+
+func (s *secureSession) ReadSecure() ([]byte, error) {
+	l, err := s.ReadLength()
+	if err != nil {
+		return nil, err
+	}
+
+	ciphertext := make([]byte, l)
+	_, err = s.Read(ciphertext)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.Decrypt(ciphertext)
 }
 
 func (s *secureSession) RemoteAddr() net.Addr {
@@ -125,7 +221,7 @@ func (s *secureSession) RemotePeer() peer.ID {
 }
 
 func (s *secureSession) RemotePublicKey() crypto.PubKey {
-	return s.remote.staticKey
+	return s.remote.libp2pKey
 }
 
 func (s *secureSession) SetDeadline(t time.Time) error {
@@ -141,7 +237,26 @@ func (s *secureSession) SetWriteDeadline(t time.Time) error {
 }
 
 func (s *secureSession) Write(in []byte) (int, error) {
+	// TODO: use noise symmetric keys
 	return s.insecure.Write(in)
+
+	err := s.WriteSecure(in)
+	return len(in), err
+}
+
+func (s *secureSession) WriteSecure(in []byte) error {
+	ciphertext, err := s.Encrypt(in)
+	if err != nil {
+		return err
+	}
+
+	err = s.WriteLength(len(ciphertext))
+	if err != nil {
+		return err
+	}
+
+	_, err = s.Write(ciphertext)
+	return err
 }
 
 func (s *secureSession) Close() error {
