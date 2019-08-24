@@ -107,11 +107,9 @@ func TestIDs(t *testing.T) {
 	}
 
 	// TODO: check after stage 0 of handshake if updated
-	// if initConn.RemotePeer() != respTransport.LocalID {
-	// 	t.Error("Initiator Remote Peer ID mismatch.")
-	// 	t.Log(initConn.RemotePeer())
-	// 	t.Log(respTransport.LocalID)
-	// }
+	if initConn.RemotePeer() != respTransport.LocalID {
+		t.Errorf("Initiator Remote Peer ID mismatch. expected %x got %x", respTransport.LocalID, initConn.RemotePeer())
+	}
 }
 
 func TestKeys(t *testing.T) {

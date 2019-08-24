@@ -127,8 +127,8 @@ func TestHandshake(t *testing.T) {
 
 	// stage 2: initiator
 	// send message
-	msg = append(msg, payload_init_enc[:]...)
-	ns_init, msgbuf = SendMessage(ns_init, msg)
+	//msg = append(msg, payload_init_enc[:]...)
+	ns_init, msgbuf = SendMessage(ns_init, nil)
 
 	t.Logf("stage 2 msgbuf: %v", msgbuf)
 	t.Logf("stage 2 msgbuf ne len: %d", len(msgbuf.NE()))

@@ -70,7 +70,7 @@ func (s *secureSession) sendHandshakeMessage(payload []byte, initial_stage bool)
 	}
 
 	log.Debug("send handshake message", "initiator", s.initiator, "msgbuf", msgbuf, "initial_stage", initial_stage)
-	log.Debug("send handshake message", "intiator", s.initiator, "encMsgBuf", encMsgBuf, "ns_len", len(msgbuf.NS()), "enc_len", len(encMsgBuf), "initial_stage", initial_stage)
+	log.Debug("send handshake message", "initiator", s.initiator, "encMsgBuf", encMsgBuf, "ns_len", len(msgbuf.NS()), "enc_len", len(encMsgBuf), "initial_stage", initial_stage)
 
 	// send message
 	_, err := s.insecure.Write(encMsgBuf)
@@ -118,9 +118,12 @@ func (s *secureSession) setRemotePeerInfo(key []byte) (err error) {
 	return err
 }
 
-func (s *secureSession) runHandshake(ctx context.Context) error {
+func (s *secureSession) setRemotePeerID(key crypto.PubKey) (err error) {
+	s.remotePeer, err = peer.IDFromPublicKey(key)
+	return err
+}
 
-	// s.remote = remotePeerInfo
+func (s *secureSession) runHandshake(ctx context.Context) error {
 
 	// TODO: check if static key for peer exists
 	// if so, do XX; otherwise do IK
@@ -128,14 +131,6 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 	// ******************************************** //
 	// ************** PHASE 1: TRY XX ************* //
 	// ******************************************** //
-
-	// get remote static key
-	// remotePub := [32]byte{}
-	// remotePubRaw, err := s.RemotePublicKey().Raw()
-	// if err != nil {
-	// 	return fmt.Errorf("remote pubkey fail: %s", err)
-	// }
-	// copy(remotePub[:], remotePubRaw)
 
 	// generate local static noise key
 	kp := xx.GenerateKeypair()
@@ -180,7 +175,7 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 		// stage 1 //
 
 		// read reply
-		buf := make([]byte, 96+(2*len(payloadEnc)))
+		buf := make([]byte, 96+len(payloadEnc))
 		plaintext, valid, err := s.recvHandshakeMessage(buf, false)
 		if err != nil {
 			return fmt.Errorf("intiator stage 1 fail: %s", err)
@@ -199,17 +194,23 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 			return fmt.Errorf("stage 1 initiator validation fail: cannot unmarshal payload")
 		}
 
-		log.Debug("stage 1 initiator", "libp2pkey", fmt.Sprintf("%x", nsp.GetLibp2PKey()))
-
 		err = s.setRemotePeerInfo(nsp.GetLibp2PKey())
 		if err != nil {
 			log.Error("stage 1 initiator set remote peer info", "err", err)
 			return fmt.Errorf("stage 1 initiator read remote libp2p key fail")
 		}
 
+		pid, err := peer.IDFromPublicKey(s.RemotePublicKey())
+		if pid != s.remotePeer {
+			log.Error("stage 1 initiator check remote peer id err", "expected", s.remotePeer, "got", pid)
+		} else if err != nil {
+			log.Error("stage 1 initiator check remote peer id", "err", err)
+		}
+
 		// stage 2 //
 
-		err = s.sendHandshakeMessage(append(plaintext, payloadEnc...), false)
+		//err = s.sendHandshakeMessage(append(plaintext, payloadEnc...), false)
+		err = s.sendHandshakeMessage(nil, false)
 		if err != nil {
 			return fmt.Errorf("stage 2 intiator fail: %s", err)
 		}
@@ -238,17 +239,20 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 			return fmt.Errorf("stage 0 responder validation fail: cannot unmarshal payload")
 		}
 
-		log.Debug("stage 0 responder", "libp2pkey", fmt.Sprintf("%x", nsp.GetLibp2PKey()))
-
 		err = s.setRemotePeerInfo(nsp.GetLibp2PKey())
 		if err != nil {
 			log.Error("stage 0 responder set remote peer info", "err", err)
 			return fmt.Errorf("stage 0 responder read remote libp2p key fail")
 		}
 
+		err = s.setRemotePeerID(s.RemotePublicKey())
+		if err != nil {
+			log.Error("stage 0 responder set remote peer id", "err", err)
+		}
+
 		// stage 1 //
 
-		err = s.sendHandshakeMessage(append(plaintext, payloadEnc...), false)
+		err = s.sendHandshakeMessage(payloadEnc, false)
 		if err != nil {
 			return fmt.Errorf("stage 1 responder fail: %s", err)
 		}
@@ -256,7 +260,7 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 		// stage 2 //
 
 		// read message
-		buf = make([]byte, 96+(3*len(payloadEnc)))
+		buf = make([]byte, 96)
 		plaintext, valid, err = s.recvHandshakeMessage(buf, false)
 		if err != nil {
 			return fmt.Errorf("stage 2 responder fail: %s", err)
