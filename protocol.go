@@ -50,6 +50,8 @@ type peerInfo struct {
 	libp2pKey crypto.PubKey
 }
 
+// newSecureSession creates a noise session that can be configured to be initialized with a static
+// noise key `noisePrivateKey`, a cache of previous
 func newSecureSession(ctx context.Context, local peer.ID, privKey crypto.PrivKey, noisePrivateKey [32]byte,
 	insecure net.Conn, remote peer.ID, noiseStaticKeyCache map[peer.ID]([32]byte),
 	noisePipesSupport bool, initiator bool) (*secureSession, error) {
@@ -175,9 +177,6 @@ func (s *secureSession) LocalPublicKey() crypto.PubKey {
 }
 
 func (s *secureSession) Read(buf []byte) (int, error) {
-	// TODO: use noise symmetric keys
-	return s.insecure.Read(buf)
-
 	plaintext, err := s.ReadSecure()
 	if err != nil {
 		return 0, nil
@@ -194,7 +193,7 @@ func (s *secureSession) ReadSecure() ([]byte, error) {
 	}
 
 	ciphertext := make([]byte, l)
-	_, err = s.Read(ciphertext)
+	_, err = s.insecure.Read(ciphertext)
 	if err != nil {
 		return nil, err
 	}
@@ -227,9 +226,6 @@ func (s *secureSession) SetWriteDeadline(t time.Time) error {
 }
 
 func (s *secureSession) Write(in []byte) (int, error) {
-	// TODO: use noise symmetric keys
-	return s.insecure.Write(in)
-
 	err := s.WriteSecure(in)
 	return len(in), err
 }
@@ -245,7 +241,7 @@ func (s *secureSession) WriteSecure(in []byte) error {
 		return err
 	}
 
-	_, err = s.Write(ciphertext)
+	_, err = s.insecure.Write(ciphertext)
 	return err
 }
 
