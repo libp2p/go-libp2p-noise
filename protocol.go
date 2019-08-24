@@ -4,15 +4,12 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	//"io"
 	"net"
 	"time"
 
 	logging "github.com/ipfs/go-log"
-	//proto "github.com/gogo/protobuf/proto"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
-	//"github.com/libp2p/go-libp2p-core/sec"
 
 	ik "github.com/ChainSafe/go-libp2p-noise/ik"
 	pb "github.com/ChainSafe/go-libp2p-noise/pb"
@@ -53,6 +50,12 @@ type peerInfo struct {
 	libp2pKey crypto.PubKey
 }
 
+// newSecureSession creates a noise session that can be configured to be initialized with a static
+// noise key `noisePrivateKey`, a cache of previous peer noise keys `noiseStaticKeyCache`, an
+// option `noisePipesSupport` to turn on or off noise pipes
+//
+// With noise pipes off, we always do XX
+// With noise pipes on, we first try IK, if that fails, move to XXfallback
 func newSecureSession(ctx context.Context, local peer.ID, privKey crypto.PrivKey, noisePrivateKey [32]byte,
 	insecure net.Conn, remote peer.ID, noiseStaticKeyCache map[peer.ID]([32]byte),
 	noisePipesSupport bool, initiator bool) (*secureSession, error) {
@@ -86,13 +89,13 @@ func (s *secureSession) NoisePrivateKey() [32]byte {
 	return s.noisePrivateKey
 }
 
-func (s *secureSession) ReadLength() (int, error) {
+func (s *secureSession) readLength() (int, error) {
 	buf := make([]byte, 2)
 	_, err := s.insecure.Read(buf)
 	return int(binary.BigEndian.Uint16(buf)), err
 }
 
-func (s *secureSession) WriteLength(length int) error {
+func (s *secureSession) writeLength(length int) error {
 	buf := make([]byte, 2)
 	binary.BigEndian.PutUint16(buf, uint16(length))
 	_, err := s.insecure.Write(buf)
@@ -126,21 +129,15 @@ func (s *secureSession) verifyPayload(payload *pb.NoiseHandshakePayload, noiseKe
 }
 
 func (s *secureSession) runHandshake(ctx context.Context) error {
-
-	log.Debugf("runHandshake", "cache", s.noiseStaticKeyCache)
-
 	// if we have the peer's noise static key and we support noise pipes, we can try IK
 	if s.noiseStaticKeyCache[s.remotePeer] != [32]byte{} || s.noisePipesSupport {
-		log.Debugf("runHandshake_ik")
-
 		// known static key for peer, try IK  //
 
 		buf, err := s.runHandshake_ik(ctx)
 		if err != nil {
 			log.Error("runHandshake_ik", "err", err)
 
-			// TODO: PIPE TO XX
-
+			// IK failed, pipe to XXfallback
 			err = s.runHandshake_xx(ctx, true, buf)
 			if err != nil {
 				log.Error("runHandshake_xx", "err", err)
@@ -153,7 +150,6 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 		s.ik_complete = true
 
 	} else {
-
 		// unknown static key for peer, try XX //
 
 		err := s.runHandshake_xx(ctx, false, nil)
@@ -185,9 +181,6 @@ func (s *secureSession) LocalPublicKey() crypto.PubKey {
 }
 
 func (s *secureSession) Read(buf []byte) (int, error) {
-	// TODO: use noise symmetric keys
-	return s.insecure.Read(buf)
-
 	plaintext, err := s.ReadSecure()
 	if err != nil {
 		return 0, nil
@@ -198,13 +191,13 @@ func (s *secureSession) Read(buf []byte) (int, error) {
 }
 
 func (s *secureSession) ReadSecure() ([]byte, error) {
-	l, err := s.ReadLength()
+	l, err := s.readLength()
 	if err != nil {
 		return nil, err
 	}
 
 	ciphertext := make([]byte, l)
-	_, err = s.Read(ciphertext)
+	_, err = s.insecure.Read(ciphertext)
 	if err != nil {
 		return nil, err
 	}
@@ -237,9 +230,6 @@ func (s *secureSession) SetWriteDeadline(t time.Time) error {
 }
 
 func (s *secureSession) Write(in []byte) (int, error) {
-	// TODO: use noise symmetric keys
-	return s.insecure.Write(in)
-
 	err := s.WriteSecure(in)
 	return len(in), err
 }
@@ -250,12 +240,12 @@ func (s *secureSession) WriteSecure(in []byte) error {
 		return err
 	}
 
-	err = s.WriteLength(len(ciphertext))
+	err = s.writeLength(len(ciphertext))
 	if err != nil {
 		return err
 	}
 
-	_, err = s.Write(ciphertext)
+	_, err = s.insecure.Write(ciphertext)
 	return err
 }
 

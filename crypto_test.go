@@ -27,6 +27,19 @@ func TestEncryptAndDecrypt_InitToResp(t *testing.T) {
 	} else if err != nil {
 		t.Fatal(err)
 	}
+
+	plaintext = []byte("goodbye")
+	ciphertext, err = initConn.Encrypt(plaintext)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result, err = respConn.Decrypt(ciphertext)
+	if !bytes.Equal(plaintext, result) {
+		t.Fatalf("got %x expected %x", result, plaintext)
+	} else if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestEncryptAndDecrypt_RespToInit(t *testing.T) {
