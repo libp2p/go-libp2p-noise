@@ -189,7 +189,30 @@ func (s *secureSession) LocalPublicKey() crypto.PubKey {
 
 func (s *secureSession) Read(buf []byte) (int, error) {
 	// TODO: use noise symmetric keys
-	return s.insecure.Read(buf)
+	//return s.insecure.Read(buf)
+
+	plaintext, err := s.ReadSecure()
+	if err != nil {
+		return 0, nil
+	}
+
+	copy(buf, plaintext)
+	return len(buf), nil
+}
+
+func (s *secureSession) ReadSecure() ([]byte, error) {
+	l, err := s.ReadLength()
+	if err != nil {
+		return nil, err
+	}
+
+	ciphertext := make([]byte, l)
+	_, err = s.Read(ciphertext)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.Decrypt(ciphertext)
 }
 
 func (s *secureSession) RemoteAddr() net.Addr {
@@ -218,7 +241,25 @@ func (s *secureSession) SetWriteDeadline(t time.Time) error {
 
 func (s *secureSession) Write(in []byte) (int, error) {
 	// TODO: use noise symmetric keys
-	return s.insecure.Write(in)
+	//return s.insecure.Write(in)
+
+	err := s.WriteSecure(in)
+	return len(in), err
+}
+
+func (s *secureSession) WriteSecure(in []byte) error {
+	ciphertext, err := s.Encrypt(in)
+	if err != nil {
+		return err
+	}
+
+	err = s.WriteLength(len(ciphertext))
+	if err != nil {
+		return err
+	}
+
+	_, err = s.Write(ciphertext)
+	return err
 }
 
 func (s *secureSession) Close() error {

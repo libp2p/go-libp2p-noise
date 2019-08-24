@@ -34,18 +34,18 @@ func (s *secureSession) Decrypt(ciphertext []byte) (plaintext []byte, err error)
 	var ok bool
 	if s.xx_complete {
 		if s.initiator {
-			cs := s.xx_ns.CS1()
+			cs := s.xx_ns.CS2()
 			cs, plaintext, ok = xx.DecryptWithAd(cs, nil, ciphertext)
 		} else {
-			cs := s.xx_ns.CS2()
+			cs := s.xx_ns.CS1()
 			cs, plaintext, ok = xx.DecryptWithAd(cs, nil, ciphertext)
 		}
 	} else if s.ik_complete {
 		if s.initiator {
-			cs := s.ik_ns.CS1()
+			cs := s.ik_ns.CS2()
 			cs, plaintext, ok = ik.DecryptWithAd(cs, nil, ciphertext)
 		} else {
-			cs := s.ik_ns.CS2()
+			cs := s.ik_ns.CS1()
 			cs, plaintext, ok = ik.DecryptWithAd(cs, nil, ciphertext)
 		}
 	} else {

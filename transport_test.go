@@ -3,7 +3,6 @@ package noise
 import (
 	"bytes"
 	"context"
-	"io"
 	"net"
 	"testing"
 
@@ -77,7 +76,7 @@ func newConnPair(t *testing.T) (net.Conn, net.Conn) {
 	return client, server
 }
 
-func connect(t *testing.T, initTransport, respTransport *Transport) (sec.SecureConn, sec.SecureConn) {
+func connect(t *testing.T, initTransport, respTransport *Transport) (*secureSession, *secureSession) {
 	init, resp := newConnPair(t)
 
 	var respConn sec.SecureConn
@@ -99,7 +98,7 @@ func connect(t *testing.T, initTransport, respTransport *Transport) (sec.SecureC
 		t.Fatal(respErr)
 	}
 
-	return initConn, respConn
+	return initConn.(*secureSession), respConn.(*secureSession)
 }
 
 func TestIDs(t *testing.T) {
@@ -148,31 +147,6 @@ func TestKeys(t *testing.T) {
 	}
 }
 
-func TestRW(t *testing.T) {
-	initTransport := newTestTransport(t, crypto.Ed25519, 2048)
-	respTransport := newTestTransport(t, crypto.Ed25519, 2048)
-
-	initConn, respConn := connect(t, initTransport, respTransport)
-	defer initConn.Close()
-	defer respConn.Close()
-
-	before := []byte("hello world")
-	_, err := initConn.Write(before)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	after := make([]byte, len(before))
-	_, err = io.ReadFull(respConn, after)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if !bytes.Equal(before, after) {
-		t.Errorf("Message mismatch. %v != %v", before, after)
-	}
-}
-
 // Tests XX handshake
 func TestHandshakeXX(t *testing.T) {
 	initTransport := newTestTransport(t, crypto.Ed25519, 2048)
@@ -189,7 +163,7 @@ func TestHandshakeXX(t *testing.T) {
 	}
 
 	after := make([]byte, len(before))
-	_, err = io.ReadFull(respConn, after)
+	_, err = respConn.Read(after)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -221,7 +195,7 @@ func TestHandshakeIK(t *testing.T) {
 	}
 
 	after := make([]byte, len(before))
-	_, err = io.ReadFull(respConn, after)
+	_, err = respConn.Read(after)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -229,5 +203,4 @@ func TestHandshakeIK(t *testing.T) {
 	if !bytes.Equal(before, after) {
 		t.Errorf("Message mismatch. %v != %v", before, after)
 	}
-
 }
