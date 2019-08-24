@@ -9,10 +9,13 @@ import (
 	"github.com/libp2p/go-libp2p-core/sec"
 )
 
+// ID is the protocol ID for noise
 const ID = "/noise/0.0.1"
 
 var _ sec.SecureTransport = &Transport{}
 
+// Transport implements the interface sec.SecureTransport
+// https://godoc.org/github.com/libp2p/go-libp2p-core/sec#SecureConn
 type Transport struct {
 	LocalID             peer.ID
 	PrivateKey          crypto.PrivKey

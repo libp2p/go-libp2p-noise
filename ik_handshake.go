@@ -23,7 +23,6 @@ func (s *secureSession) ik_sendHandshakeMessage(payload []byte, initial_stage bo
 	}
 
 	log.Debugf("ik_sendHandshakeMessage", "initiator", s.initiator, "msgbuf", msgbuf)
-	log.Debugf("ik_sendHandshakeMessage", "initiator", s.initiator, "encMsgBuf", encMsgBuf, "ns_len", len(msgbuf.NS()), "enc_len", len(encMsgBuf))
 
 	err := s.WriteLength(len(encMsgBuf))
 	if err != nil {

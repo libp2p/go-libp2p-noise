@@ -170,9 +170,6 @@ func (mb *MessageBuffer) Encode1() []byte {
 	enc = append(enc, mb.ne[:]...)
 	enc = append(enc, mb.ciphertext...)
 
-	// log.Debug("XX_Encode1", "ne", mb.ne)
-	// log.Debug("XX_Encode1", "ns", mb.ns)
-
 	return enc
 }
 
@@ -182,12 +179,10 @@ func Decode0(in []byte) (*MessageBuffer, error) {
 		return nil, errors.New("cannot decode stage 0 MessageBuffer: length less than 32 bytes")
 	}
 
-	//log.Debug("XX_Decode0", "in", in)
 	mb := new(MessageBuffer)
 	copy(mb.ne[:], in[:32])
 	mb.ns = in[32:80]
 	mb.ciphertext = in[80:]
-	//log.Debug("XX_Decode0", "mb", mb)
 
 	return mb, nil
 }
@@ -195,18 +190,12 @@ func Decode0(in []byte) (*MessageBuffer, error) {
 // Decodes messages at stage 1 into MessageBuffer
 func Decode1(in []byte) (*MessageBuffer, error) {
 	if len(in) < 80 {
-		return nil, errors.New("cannot decode stage 1/2 MessageBuffer: length less than 96 bytes")
+		return nil, errors.New("cannot decode stage 1 MessageBuffer: length less than 96 bytes")
 	}
-
-	// log.Debug("XX_Decode1", "in", in)
-	// log.Debug("XX_Decode1", "ns", in[32:80])
 
 	mb := new(MessageBuffer)
 	copy(mb.ne[:], in[:32])
-	//mb.ns = in[32:80]
 	mb.ciphertext = in[32:]
-	// copy(mb.ns,)
-	// copy(mb.ciphertext,)
 
 	return mb, nil
 }
@@ -523,7 +512,6 @@ func SendMessage(session *NoiseSession, message []byte) (*NoiseSession, MessageB
 	}
 	if session.mc == 1 {
 		session.h, messageBuffer, session.cs1, session.cs2 = writeMessageB(&session.hs, message)
-		//session.hs = handshakestate{}
 	}
 	session.mc = session.mc + 1
 	return session, messageBuffer
@@ -537,7 +525,6 @@ func RecvMessage(session *NoiseSession, message *MessageBuffer) (*NoiseSession, 
 	}
 	if session.mc == 1 {
 		session.h, plaintext, valid, session.cs1, session.cs2 = readMessageB(&session.hs, message)
-		//session.hs = handshakestate{}
 	}
 	session.mc = session.mc + 1
 	return session, plaintext, valid

@@ -4,15 +4,12 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	//"io"
 	"net"
 	"time"
 
 	logging "github.com/ipfs/go-log"
-	//proto "github.com/gogo/protobuf/proto"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
-	//"github.com/libp2p/go-libp2p-core/sec"
 
 	ik "github.com/ChainSafe/go-libp2p-noise/ik"
 	pb "github.com/ChainSafe/go-libp2p-noise/pb"
@@ -126,21 +123,15 @@ func (s *secureSession) verifyPayload(payload *pb.NoiseHandshakePayload, noiseKe
 }
 
 func (s *secureSession) runHandshake(ctx context.Context) error {
-
-	log.Debugf("runHandshake", "cache", s.noiseStaticKeyCache)
-
 	// if we have the peer's noise static key and we support noise pipes, we can try IK
 	if s.noiseStaticKeyCache[s.remotePeer] != [32]byte{} || s.noisePipesSupport {
-		log.Debugf("runHandshake_ik")
-
 		// known static key for peer, try IK  //
 
 		buf, err := s.runHandshake_ik(ctx)
 		if err != nil {
 			log.Error("runHandshake_ik", "err", err)
 
-			// TODO: PIPE TO XX
-
+			// IK failed, pipe to XXfallback
 			err = s.runHandshake_xx(ctx, true, buf)
 			if err != nil {
 				log.Error("runHandshake_xx", "err", err)
@@ -153,7 +144,6 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 		s.ik_complete = true
 
 	} else {
-
 		// unknown static key for peer, try XX //
 
 		err := s.runHandshake_xx(ctx, false, nil)

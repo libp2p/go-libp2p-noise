@@ -3,7 +3,7 @@ package noise
 import (
 	"context"
 	"fmt"
-	//log "github.com/ChainSafe/log15"
+
 	proto "github.com/gogo/protobuf/proto"
 	"github.com/libp2p/go-libp2p-core/peer"
 
@@ -25,7 +25,6 @@ func (s *secureSession) xx_sendHandshakeMessage(payload []byte, initial_stage bo
 	}
 
 	log.Debugf("xx_sendHandshakeMessage", "initiator", s.initiator, "msgbuf", msgbuf, "initial_stage", initial_stage)
-	//log.Debugf("xx_sendHandshakeMessage", "initiator", s.initiator, "encMsgBuf", encMsgBuf, "ns_len", len(msgbuf.NS()), "enc_len", len(encMsgBuf), "initial_stage", initial_stage)
 
 	err := s.WriteLength(len(encMsgBuf))
 	if err != nil {
@@ -62,8 +61,6 @@ func (s *secureSession) xx_recvHandshakeMessage(initial_stage bool) (buf []byte,
 	} else {
 		msgbuf, err = xx.Decode1(buf)
 	}
-
-	//log.Debugf("xx_recvHandshakeMessage", "initiator", s.initiator, "msgbuf", msgbuf, "buf len", len(buf), "initial_stage", initial_stage)
 
 	if err != nil {
 		log.Debugf("xx_recvHandshakeMessage decode", "initiator", s.initiator, "error", err)
@@ -181,13 +178,7 @@ func (s *secureSession) runHandshake_xx(ctx context.Context, fallback bool, init
 				return fmt.Errorf("validation fail")
 			}
 
-			//log.Debugf("stage 1 xx_recvHandshakeMessage", "initiator", s.initiator, "msgbuf", msgbuf, "payload len", len(plaintext))
-
 		}
-
-		log.Debugf("stage 1 initiator", "payload", plaintext)
-
-		log.Debugf("stage 1 initiator", "remote key", s.xx_ns.RemoteKey())
 
 		// stage 2 //
 
@@ -243,7 +234,7 @@ func (s *secureSession) runHandshake_xx(ctx context.Context, fallback bool, init
 
 		if !fallback {
 			// read message
-			buf, plaintext, valid, err = s.xx_recvHandshakeMessage(true)
+			_, plaintext, valid, err = s.xx_recvHandshakeMessage(true)
 			if err != nil {
 				return fmt.Errorf("stage 0 responder fail: %s", err)
 			}
@@ -288,8 +279,6 @@ func (s *secureSession) runHandshake_xx(ctx context.Context, fallback bool, init
 				log.Error("xx_recvHandshakeMessage", "initiator", s.initiator, "error", "validation fail")
 				return fmt.Errorf("validation fail")
 			}
-
-			//log.Debugf("xx_recvHandshakeMessage", "initiator", s.initiator, "msgbuf", msgbuf, "payload len", len(plaintext))
 		}
 
 		log.Debugf("stage 0 responder", "plaintext", plaintext, "plaintext len", len(plaintext))
@@ -304,7 +293,7 @@ func (s *secureSession) runHandshake_xx(ctx context.Context, fallback bool, init
 		// stage 2 //
 
 		// read message
-		buf, plaintext, valid, err = s.xx_recvHandshakeMessage(false)
+		_, plaintext, valid, err = s.xx_recvHandshakeMessage(false)
 		if err != nil {
 			return fmt.Errorf("stage 2 responder fail: %s", err)
 		}
