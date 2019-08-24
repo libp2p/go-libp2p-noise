@@ -8,7 +8,7 @@ import (
 	"net"
 	"time"
 
-	log "github.com/ChainSafe/log15"
+	logging "github.com/ipfs/go-log"
 	//proto "github.com/gogo/protobuf/proto"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -18,6 +18,8 @@ import (
 	pb "github.com/ChainSafe/go-libp2p-noise/pb"
 	xx "github.com/ChainSafe/go-libp2p-noise/xx"
 )
+
+var log = logging.Logger("noise")
 
 const payload_string = "noise-libp2p-static-key:"
 
@@ -111,7 +113,7 @@ func (s *secureSession) verifyPayload(payload *pb.NoiseHandshakePayload, noiseKe
 	sig := payload.GetNoiseStaticKeySignature()
 	msg := append([]byte(payload_string), noiseKey[:]...)
 
-	log.Debug("verifyPayload", "msg", msg)
+	log.Debugf("verifyPayload", "msg", fmt.Sprintf("%x", msg))
 
 	ok, err := s.RemotePublicKey().Verify(msg, sig)
 	if err != nil {
@@ -125,11 +127,11 @@ func (s *secureSession) verifyPayload(payload *pb.NoiseHandshakePayload, noiseKe
 
 func (s *secureSession) runHandshake(ctx context.Context) error {
 
-	log.Debug("runHandshake", "cache", s.noiseStaticKeyCache)
+	log.Debugf("runHandshake", "cache", s.noiseStaticKeyCache)
 
 	// if we have the peer's noise static key and we support noise pipes, we can try IK
 	if s.noiseStaticKeyCache[s.remotePeer] != [32]byte{} || s.noisePipesSupport {
-		log.Debug("runHandshake_ik")
+		log.Debugf("runHandshake_ik")
 
 		// known static key for peer, try IK  //
 

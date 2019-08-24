@@ -3,7 +3,6 @@ package noise
 import (
 	"context"
 	"fmt"
-	log "github.com/ChainSafe/log15"
 	proto "github.com/gogo/protobuf/proto"
 
 	ik "github.com/ChainSafe/go-libp2p-noise/ik"
@@ -11,7 +10,7 @@ import (
 )
 
 func (s *secureSession) ik_sendHandshakeMessage(payload []byte, initial_stage bool) error {
-	log.Debug("ik_sendHandshakeMessage", "initiator", s.initiator, "payload", payload, "payload len", len(payload))
+	log.Debugf("ik_sendHandshakeMessage", "initiator", s.initiator, "payload", payload, "payload len", len(payload))
 
 	// create send message w payload
 	var msgbuf ik.MessageBuffer
@@ -23,8 +22,8 @@ func (s *secureSession) ik_sendHandshakeMessage(payload []byte, initial_stage bo
 		encMsgBuf = msgbuf.Encode1()
 	}
 
-	log.Debug("ik_sendHandshakeMessage", "initiator", s.initiator, "msgbuf", msgbuf)
-	log.Debug("ik_sendHandshakeMessage", "initiator", s.initiator, "encMsgBuf", encMsgBuf, "ns_len", len(msgbuf.NS()), "enc_len", len(encMsgBuf))
+	log.Debugf("ik_sendHandshakeMessage", "initiator", s.initiator, "msgbuf", msgbuf)
+	log.Debugf("ik_sendHandshakeMessage", "initiator", s.initiator, "encMsgBuf", encMsgBuf, "ns_len", len(msgbuf.NS()), "enc_len", len(encMsgBuf))
 
 	err := s.WriteLength(len(encMsgBuf))
 	if err != nil {
@@ -62,7 +61,7 @@ func (s *secureSession) ik_recvHandshakeMessage(initial_stage bool) (buf []byte,
 		msgbuf, err = ik.Decode1(buf)
 	}
 
-	log.Debug("ik_recvHandshakeMessage", "initiator", s.initiator, "msgbuf", msgbuf, "buf len", len(buf))
+	log.Debugf("ik_recvHandshakeMessage", "initiator", s.initiator, "msgbuf", msgbuf, "buf len", len(buf))
 
 	if err != nil {
 		log.Error("ik_recvHandshakeMessage decode", "initiator", s.initiator, "error", err)
@@ -75,7 +74,7 @@ func (s *secureSession) ik_recvHandshakeMessage(initial_stage bool) (buf []byte,
 		return buf, nil, false, fmt.Errorf("validation fail")
 	}
 
-	log.Debug("recv handshake message", "initiator", s.initiator, "msgbuf", msgbuf, "payload len", len(plaintext))
+	log.Debugf("recv handshake message", "initiator", s.initiator, "msgbuf", msgbuf, "payload len", len(plaintext))
 
 	return buf, plaintext, valid, nil
 }
@@ -88,7 +87,7 @@ func (s *secureSession) runHandshake_ik(ctx context.Context) ([]byte, error) {
 		// generate local static noise key
 		kp = ik.GenerateKeypair()
 		s.noisePrivateKey = kp.PrivKey()
-		log.Debug("ik generate new noise kp", "initiator", s.initiator)
+		log.Debugf("ik generate new noise kp", "initiator", s.initiator)
 	} else {
 		pub := ik.GeneratePublicKey(s.noisePrivateKey)
 		kp = ik.NewKeypair(pub, s.noisePrivateKey)
@@ -96,7 +95,7 @@ func (s *secureSession) runHandshake_ik(ctx context.Context) ([]byte, error) {
 
 	s.local.noiseKey = kp.PubKey()
 
-	log.Debug("ik handshake", "noise pubkey", kp.PubKey())
+	log.Debugf("ik handshake", "noise pubkey", kp.PubKey())
 
 	// setup libp2p keys
 	localKeyRaw, err := s.LocalPublicKey().Bytes()
@@ -104,7 +103,7 @@ func (s *secureSession) runHandshake_ik(ctx context.Context) ([]byte, error) {
 		return nil, fmt.Errorf("err getting raw pubkey: %s", err)
 	}
 
-	log.Debug("ik handshake", "local libp2p key", localKeyRaw, "len", len(localKeyRaw))
+	log.Debugf("ik handshake", "local libp2p key", localKeyRaw, "len", len(localKeyRaw))
 
 	// sign noise data for payload
 	noise_pub := kp.PubKey()
@@ -124,7 +123,7 @@ func (s *secureSession) runHandshake_ik(ctx context.Context) ([]byte, error) {
 
 	// new XX noise session
 	s.ik_ns = ik.InitSession(s.initiator, s.prologue, kp, s.noiseStaticKeyCache[s.remotePeer])
-	log.Debug("ik initiator init session", "remotePeer", s.noiseStaticKeyCache[s.remotePeer])
+	log.Debugf("ik initiator init session", "remotePeer", s.noiseStaticKeyCache[s.remotePeer])
 
 	if s.initiator {
 		// stage 0 //
@@ -175,7 +174,7 @@ func (s *secureSession) runHandshake_ik(ctx context.Context) ([]byte, error) {
 	} else {
 		// stage 0 //
 
-		log.Debug("ik responder", "noiseKey", kp.PubKey())
+		log.Debugf("ik responder", "noiseKey", kp.PubKey())
 		var buf, plaintext []byte
 		var valid bool
 
@@ -189,7 +188,7 @@ func (s *secureSession) runHandshake_ik(ctx context.Context) ([]byte, error) {
 			return buf, fmt.Errorf("stage 0 responder validation fail")
 		}
 
-		log.Debug("stage 0 responder", "plaintext", plaintext, "plaintext len", len(plaintext))
+		log.Debugf("stage 0 responder", "plaintext", plaintext, "plaintext len", len(plaintext))
 
 		// unmarshal payload
 		nhp := new(pb.NoiseHandshakePayload)
@@ -227,6 +226,6 @@ func (s *secureSession) runHandshake_ik(ctx context.Context) ([]byte, error) {
 
 	}
 
-	log.Debug("ik_handshake done", "initiator", s.initiator)
+	log.Debugf("ik_handshake done", "initiator", s.initiator)
 	return nil, nil
 }
