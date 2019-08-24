@@ -88,6 +88,10 @@ func (kp Keypair) PrivKey() [32]byte {
 	return kp.private_key
 }
 
+func (ns *NoiseSession) RemoteKey() [32]byte {
+	return ns.hs.rs
+}
+
 func NewMessageBuffer(ne [32]byte, ns []byte, ciphertext []byte) MessageBuffer {
 	return MessageBuffer{
 		ne:         ne,

@@ -123,6 +123,20 @@ func (s *secureSession) setRemotePeerID(key crypto.PubKey) (err error) {
 	return err
 }
 
+func (s *secureSession) verifyPayload(payload *pb.NoiseHandshakePayload, noiseKey [32]byte) (err error) {
+	sig := payload.GetNoiseStaticKeySignature()
+	msg := append([]byte(payload_string), noiseKey[:]...)
+
+	ok, err := s.RemotePublicKey().Verify(msg, sig)
+	if err != nil {
+		return err
+	} else if !ok {
+		return fmt.Errorf("did not verify payload")
+	}
+
+	return nil
+}
+
 func (s *secureSession) runHandshake(ctx context.Context) error {
 
 	// TODO: check if static key for peer exists
@@ -185,26 +199,34 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 			return fmt.Errorf("stage 1 initiator validation fail")
 		}
 
-		// TODO: check payload
 		log.Debug("stage 1 initiator", "payload", plaintext)
 
-		nsp := new(pb.NoiseHandshakePayload)
-		err = proto.Unmarshal(plaintext, nsp)
+		// unmarshal payload
+		nhp := new(pb.NoiseHandshakePayload)
+		err = proto.Unmarshal(plaintext, nhp)
 		if err != nil {
 			return fmt.Errorf("stage 1 initiator validation fail: cannot unmarshal payload")
 		}
 
-		err = s.setRemotePeerInfo(nsp.GetLibp2PKey())
+		// set remote libp2p public key
+		err = s.setRemotePeerInfo(nhp.GetLibp2PKey())
 		if err != nil {
 			log.Error("stage 1 initiator set remote peer info", "err", err)
 			return fmt.Errorf("stage 1 initiator read remote libp2p key fail")
 		}
 
+		// assert that remote peer ID matches libp2p public key
 		pid, err := peer.IDFromPublicKey(s.RemotePublicKey())
 		if pid != s.remotePeer {
 			log.Error("stage 1 initiator check remote peer id err", "expected", s.remotePeer, "got", pid)
 		} else if err != nil {
 			log.Error("stage 1 initiator check remote peer id", "err", err)
+		}
+
+		// verify payload is signed by libp2p key
+		err = s.verifyPayload(nhp, s.ns.RemoteKey())
+		if err != nil {
+			log.Error("stage 1 initiator verify payload", "err", err)
 		}
 
 		// stage 2 //
@@ -230,24 +252,32 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 			return fmt.Errorf("stage 0 responder validation fail")
 		}
 
-		// TODO: check payload
 		log.Debug("stage 0 responder", "plaintext", plaintext, "plaintext len", len(plaintext))
 
-		nsp := new(pb.NoiseHandshakePayload)
-		err = proto.Unmarshal(plaintext, nsp)
+		// unmarshal payload
+		nhp := new(pb.NoiseHandshakePayload)
+		err = proto.Unmarshal(plaintext, nhp)
 		if err != nil {
 			return fmt.Errorf("stage 0 responder validation fail: cannot unmarshal payload")
 		}
 
-		err = s.setRemotePeerInfo(nsp.GetLibp2PKey())
+		// set remote libp2p public key
+		err = s.setRemotePeerInfo(nhp.GetLibp2PKey())
 		if err != nil {
 			log.Error("stage 0 responder set remote peer info", "err", err)
 			return fmt.Errorf("stage 0 responder read remote libp2p key fail")
 		}
 
+		// assert that remote peer ID matches libp2p key
 		err = s.setRemotePeerID(s.RemotePublicKey())
 		if err != nil {
 			log.Error("stage 0 responder set remote peer id", "err", err)
+		}
+
+		// verify payload is signed by libp2p key
+		err = s.verifyPayload(nhp, s.ns.RemoteKey())
+		if err != nil {
+			log.Error("stage 1 initiator verify payload", "err", err)
 		}
 
 		// stage 1 //
