@@ -9,7 +9,7 @@ import (
 	"time"
 
 	log "github.com/ChainSafe/log15"
-	proto "github.com/gogo/protobuf/proto"
+	//proto "github.com/gogo/protobuf/proto"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
 	//"github.com/libp2p/go-libp2p-core/sec"
@@ -39,6 +39,8 @@ type secureSession struct {
 
 	noisePipesSupport   bool
 	noiseStaticKeyCache map[peer.ID]([32]byte)
+
+	noisePrivateKey [32]byte
 }
 
 type peerInfo struct {
@@ -46,7 +48,7 @@ type peerInfo struct {
 	libp2pKey crypto.PubKey
 }
 
-func newSecureSession(ctx context.Context, local peer.ID, privKey crypto.PrivKey,
+func newSecureSession(ctx context.Context, local peer.ID, privKey crypto.PrivKey, noisePrivateKey [32]byte,
 	insecure net.Conn, remote peer.ID, noiseStaticKeyCache map[peer.ID]([32]byte),
 	noisePipesSupport bool, initiator bool) (*secureSession, error) {
 
@@ -63,6 +65,7 @@ func newSecureSession(ctx context.Context, local peer.ID, privKey crypto.PrivKey
 		remotePeer:          remote,
 		noisePipesSupport:   noisePipesSupport,
 		noiseStaticKeyCache: noiseStaticKeyCache,
+		noisePrivateKey:     noisePrivateKey,
 	}
 
 	err := s.runHandshake(ctx)
@@ -72,6 +75,10 @@ func newSecureSession(ctx context.Context, local peer.ID, privKey crypto.PrivKey
 
 func (s *secureSession) NoiseStaticKeyCache() map[peer.ID]([32]byte) {
 	return s.noiseStaticKeyCache
+}
+
+func (s *secureSession) NoisePrivateKey() [32]byte {
+	return s.noisePrivateKey
 }
 
 func (s *secureSession) setRemotePeerInfo(key []byte) (err error) {
@@ -113,25 +120,25 @@ func (s *secureSession) WriteLength(length int) error {
 
 func (s *secureSession) runHandshake(ctx context.Context) error {
 
-	// TODO: check if static key for peer exists
-	// if not, do XX; otherwise do IK
-
 	log.Debug("runHandshake", "cache", s.noiseStaticKeyCache)
 
-	// try
+	// if we have the peer's noise static key and we support noise pipes, we can try IK
 	if s.noiseStaticKeyCache[s.remotePeer] != [32]byte{} && s.noisePipesSupport {
-		//if s.noisePipesSupport {
 		log.Debug("runHandshake_ik")
+
 		// ******************************************** //
 		// known static key for peer, try IK  //
 		// ******************************************** //
 
-		err := s.runHandshake_ik(ctx, nil)
+		_, err := s.runHandshake_ik(ctx, nil)
 		if err != nil {
 			log.Error("runHandshake_ik", "err", err)
-
+			return err
 			// TODO: PIPE TO XX
-
+			// _, err := s.runHandshake_xx(ctx, true, buf)
+			// if err != nil {
+			// 	return fmt.Errorf("runHandshake_xx err %s", err)
+			// }
 		}
 
 	} else {
@@ -139,49 +146,19 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 		// unknown static key for peer, try XX //
 		// ******************************************** //
 
-		// generate local static noise key
-		kp := xx.GenerateKeypair()
-
-		log.Debug("xx handshake", "pubkey", kp.PubKey())
-
-		// setup libp2p keys
-		localKeyRaw, err := s.LocalPublicKey().Bytes()
-		if err != nil {
-			return fmt.Errorf("err getting raw pubkey: %s", err)
-		}
-
-		log.Debug("xx handshake", "local key", localKeyRaw, "len", len(localKeyRaw))
-
-		// sign noise data for payload
-		noise_pub := kp.PubKey()
-		signedPayload, err := s.localKey.Sign(append([]byte(payload_string), noise_pub[:]...))
-		if err != nil {
-			return fmt.Errorf("err signing payload: %s", err)
-		}
-
-		s.local.noiseKey = noise_pub
-
-		// create payload
-		payload := new(pb.NoiseHandshakePayload)
-		payload.Libp2PKey = localKeyRaw
-		payload.NoiseStaticKeySignature = signedPayload
-		payloadEnc, err := proto.Marshal(payload)
-		if err != nil {
-			return fmt.Errorf("proto marshal payload fail: %s", err)
-		}
-
-		// new XX noise session
-		s.xx_ns = xx.InitSession(s.initiator, s.prologue, kp, [32]byte{})
-
-		handshakeData, err := s.runHandshake_xx(ctx, payloadEnc)
+		handshakeData, err := s.runHandshake_xx(ctx, false, nil)
 		if err != nil {
 			log.Error("runHandshake_xx", "err", err)
 			log.Debug("try runHandshake_ik...")
-			err := s.runHandshake_ik(ctx, handshakeData)
+			_, err := s.runHandshake_ik(ctx, handshakeData)
 			if err != nil {
-				return fmt.Errorf("runHandshake_ik err %s", err)
+				log.Error("runHandshake_ik", "err", err)
+				return err
+				// _, err = s.runHandshake_xx(ctx, true, msg[:32])
+				// if err != nil {
+				// 	return fmt.Errorf("runHandshake_xx err %s", err)
+				// }
 			}
-			//return fmt.Errorf("runHandshake_xx err %s", err)
 		}
 	}
 

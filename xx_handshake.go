@@ -7,8 +7,8 @@ import (
 	proto "github.com/gogo/protobuf/proto"
 	"github.com/libp2p/go-libp2p-core/peer"
 
-	xx "github.com/ChainSafe/go-libp2p-noise/xx"
 	pb "github.com/ChainSafe/go-libp2p-noise/pb"
+	xx "github.com/ChainSafe/go-libp2p-noise/xx"
 )
 
 func (s *secureSession) xx_sendHandshakeMessage(payload []byte, initial_stage bool) error {
@@ -81,13 +81,58 @@ func (s *secureSession) xx_recvHandshakeMessage(initial_stage bool) (buf []byte,
 	return buf, plaintext, valid, nil
 }
 
-func (s *secureSession) runHandshake_xx(ctx context.Context, payloadEnc []byte) (handshakeData []byte, err error) {
+// if fallback = true, use msg as initial message in stage 0
+func (s *secureSession) runHandshake_xx(ctx context.Context, fallback bool, msg []byte) (handshakeData []byte, err error) {
+	var kp xx.Keypair
+
+	if s.noisePrivateKey == [32]byte{} {
+		// generate local static noise key
+		kp = xx.GenerateKeypair()
+		s.noisePrivateKey = kp.PrivKey()	
+	} else {
+		pub := xx.GeneratePublicKey(s.noisePrivateKey)
+		kp = xx.NewKeypair(pub, s.noisePrivateKey)
+	}
+
+	log.Debug("xx handshake", "pubkey", kp.PubKey())
+
+	// setup libp2p keys
+	localKeyRaw, err := s.LocalPublicKey().Bytes()
+	if err != nil {
+		return nil, fmt.Errorf("err getting raw pubkey: %s", err)
+	}
+
+	log.Debug("xx handshake", "local key", localKeyRaw, "len", len(localKeyRaw))
+
+	// sign noise data for payload
+	noise_pub := kp.PubKey()
+	signedPayload, err := s.localKey.Sign(append([]byte(payload_string), noise_pub[:]...))
+	if err != nil {
+		return nil, fmt.Errorf("err signing payload: %s", err)
+	}
+
+	s.local.noiseKey = noise_pub
+
+	// create payload
+	payload := new(pb.NoiseHandshakePayload)
+	payload.Libp2PKey = localKeyRaw
+	payload.NoiseStaticKeySignature = signedPayload
+	payloadEnc, err := proto.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("proto marshal payload fail: %s", err)
+	}
+
+	// new XX noise session
+	s.xx_ns = xx.InitSession(s.initiator, s.prologue, kp, [32]byte{})
+
 	if s.initiator {
 		// stage 0 //
 
-		err = s.xx_sendHandshakeMessage(payloadEnc, true)
-		if err != nil {
-			return nil, fmt.Errorf("stage 0 initiator fail: %s", err)
+		if !fallback {
+			err = s.xx_sendHandshakeMessage(payloadEnc, true)
+			if err != nil {
+				return nil, fmt.Errorf("stage 0 initiator fail: %s", err)
+			}
 		}
 
 		// stage 1 //
@@ -137,46 +182,77 @@ func (s *secureSession) runHandshake_xx(ctx context.Context, payloadEnc []byte) 
 
 		// stage 2 //
 
-		err = s.xx_sendHandshakeMessage(s.local.noiseKey[:], false)
-		if err != nil {
-			return buf, fmt.Errorf("stage 2 intiator fail: %s", err)
+		if !fallback {
+			err = s.xx_sendHandshakeMessage(s.local.noiseKey[:], false)
+			if err != nil {
+				return buf, fmt.Errorf("stage 2 intiator fail: %s", err)
+			}
+		} else {
+			err = s.xx_sendHandshakeMessage(payloadEnc, false)
+			if err != nil {
+				return buf, fmt.Errorf("stage 2 intiator fail: %s", err)
+			}
 		}
 
 	} else {
 
 		// stage 0 //
 
-		// read message
-		buf, plaintext, valid, err := s.xx_recvHandshakeMessage(true)
-		if err != nil {
-			return buf, fmt.Errorf("stage 0 responder fail: %s", err)
-		}
+		var buf, plaintext []byte
+		var valid bool
+		nhp := new(pb.NoiseHandshakePayload)
 
-		if !valid {
-			return buf, fmt.Errorf("stage 0 responder validation fail")
+		if !fallback {
+			// read message
+			buf, plaintext, valid, err = s.xx_recvHandshakeMessage(true)
+			if err != nil {
+				return buf, fmt.Errorf("stage 0 responder fail: %s", err)
+			}
+
+			if !valid {
+				return buf, fmt.Errorf("stage 0 responder validation fail")
+			}
+
+			// unmarshal payload
+			err = proto.Unmarshal(plaintext, nhp)
+			if err != nil {
+				return buf, fmt.Errorf("stage 0 responder validation fail: cannot unmarshal payload")
+			}
+
+			// set remote libp2p public key
+			err = s.setRemotePeerInfo(nhp.GetLibp2PKey())
+			if err != nil {
+				log.Error("stage 0 responder set remote peer info", "err", err)
+				return buf, fmt.Errorf("stage 0 responder read remote libp2p key fail")
+			}
+
+			// assert that remote peer ID matches libp2p key
+			err = s.setRemotePeerID(s.RemotePublicKey())
+			if err != nil {
+				log.Error("stage 0 responder set remote peer id", "err", err)
+			}
+
+		} else {
+			var msgbuf *xx.MessageBuffer
+			msgbuf, err = xx.Decode0(msg)
+
+			log.Debug("xx_recvHandshakeMessage", "initiator", s.initiator, "msgbuf", msg, "buf len", len(buf))
+
+			if err != nil {
+				log.Debug("xx_recvHandshakeMessage decode", "initiator", s.initiator, "error", err)
+				return buf, fmt.Errorf("decode msg fail: %s", err)
+			}
+
+			s.xx_ns, plaintext, valid = xx.RecvMessage(s.xx_ns, msgbuf)
+			if !valid {
+				log.Error("xx_recvHandshakeMessage", "initiator", s.initiator, "error", "validation fail")
+				return buf, fmt.Errorf("validation fail")
+			}
+
+			log.Debug("xx_recvHandshakeMessage", "initiator", s.initiator, "msgbuf", msgbuf, "payload len", len(plaintext))
 		}
 
 		log.Debug("stage 0 responder", "plaintext", plaintext, "plaintext len", len(plaintext))
-
-		// unmarshal payload
-		nhp := new(pb.NoiseHandshakePayload)
-		err = proto.Unmarshal(plaintext, nhp)
-		if err != nil {
-			return buf, fmt.Errorf("stage 0 responder validation fail: cannot unmarshal payload")
-		}
-
-		// set remote libp2p public key
-		err = s.setRemotePeerInfo(nhp.GetLibp2PKey())
-		if err != nil {
-			log.Error("stage 0 responder set remote peer info", "err", err)
-			return buf, fmt.Errorf("stage 0 responder read remote libp2p key fail")
-		}
-
-		// assert that remote peer ID matches libp2p key
-		err = s.setRemotePeerID(s.RemotePublicKey())
-		if err != nil {
-			log.Error("stage 0 responder set remote peer id", "err", err)
-		}
 
 		// stage 1 //
 
@@ -200,6 +276,29 @@ func (s *secureSession) runHandshake_xx(ctx context.Context, payloadEnc []byte) 
 		log.Debug("stage 2 responder", "plaintext", plaintext, "remote key", s.xx_ns.RemoteKey())
 
 		copy(s.remote.noiseKey[:], plaintext)
+
+		if fallback {
+
+			// unmarshal payload
+			err = proto.Unmarshal(plaintext, nhp)
+			if err != nil {
+				return buf, fmt.Errorf("stage 0 responder validation fail: cannot unmarshal payload")
+			}
+
+			// set remote libp2p public key
+			err = s.setRemotePeerInfo(nhp.GetLibp2PKey())
+			if err != nil {
+				log.Error("stage 0 responder set remote peer info", "err", err)
+				return buf, fmt.Errorf("stage 0 responder read remote libp2p key fail")
+			}
+
+			// assert that remote peer ID matches libp2p key
+			err = s.setRemotePeerID(s.RemotePublicKey())
+			if err != nil {
+				log.Error("stage 0 responder set remote peer id", "err", err)
+			}
+
+		}
 
 		// verify payload is signed by libp2p key
 		err = s.verifyPayload(nhp, s.remote.noiseKey)

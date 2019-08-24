@@ -18,26 +18,29 @@ type Transport struct {
 	PrivateKey          crypto.PrivKey
 	NoisePipesSupport   bool
 	NoiseStaticKeyCache map[peer.ID]([32]byte)
+	NoisePrivateKey     [32]byte
 }
 
 // SecureInbound runs noise handshake as the responder
 func (t *Transport) SecureInbound(ctx context.Context, insecure net.Conn) (sec.SecureConn, error) {
-	s, err := newSecureSession(ctx, t.LocalID, t.PrivateKey, insecure, "", t.NoiseStaticKeyCache, t.NoisePipesSupport, false)
+	s, err := newSecureSession(ctx, t.LocalID, t.PrivateKey, t.NoisePrivateKey, insecure, "", t.NoiseStaticKeyCache, t.NoisePipesSupport, false)
 	if err != nil {
 		return s, err
 	}
 
 	t.NoiseStaticKeyCache = s.NoiseStaticKeyCache()
+	t.NoisePrivateKey = s.NoisePrivateKey()
 	return s, nil
 }
 
 // SecureOutbound runs noise handshake as the initiator
 func (t *Transport) SecureOutbound(ctx context.Context, insecure net.Conn, p peer.ID) (sec.SecureConn, error) {
-	s, err := newSecureSession(ctx, t.LocalID, t.PrivateKey, insecure, p, t.NoiseStaticKeyCache, t.NoisePipesSupport, true)
+	s, err := newSecureSession(ctx, t.LocalID, t.PrivateKey, t.NoisePrivateKey, insecure, p, t.NoiseStaticKeyCache, t.NoisePipesSupport, true)
 	if err != nil {
 		return s, err
 	}
 
 	t.NoiseStaticKeyCache = s.NoiseStaticKeyCache()
+	t.NoisePrivateKey = s.NoisePrivateKey()
 	return s, nil
 }

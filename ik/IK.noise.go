@@ -249,7 +249,7 @@ func GenerateKeypair() Keypair {
 	return GenerateKeypair()
 }
 
-func generatePublicKey(private_key [32]byte) [32]byte {
+func GeneratePublicKey(private_key [32]byte) [32]byte {
 	var public_key [32]byte
 	curve25519.ScalarBaseMult(&public_key, &private_key)
 	return public_key
