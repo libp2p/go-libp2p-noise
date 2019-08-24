@@ -524,7 +524,7 @@ func SendMessage(session *NoiseSession, message []byte) (*NoiseSession, MessageB
 	}
 	if session.mc == 1 {
 		session.h, messageBuffer, session.cs1, session.cs2 = writeMessageB(&session.hs, message)
-		session.hs = handshakestate{}
+		//session.hs = handshakestate{}
 	}
 	session.mc = session.mc + 1
 	return session, messageBuffer
@@ -538,7 +538,7 @@ func RecvMessage(session *NoiseSession, message *MessageBuffer) (*NoiseSession, 
 	}
 	if session.mc == 1 {
 		session.h, plaintext, valid, session.cs1, session.cs2 = readMessageB(&session.hs, message)
-		session.hs = handshakestate{}
+		//session.hs = handshakestate{}
 	}
 	session.mc = session.mc + 1
 	return session, plaintext, valid
