@@ -25,6 +25,14 @@ type Transport struct {
 	NoisePublicKey      [32]byte
 }
 
+func NewTransport(localID peer.ID, privkey crypto.PrivKey, noisePipesSupport bool) *Transport {
+	return &Transport{
+		LocalID:           localID,
+		PrivateKey:        privkey,
+		NoisePipesSupport: noisePipesSupport,
+	}
+}
+
 // SecureInbound runs noise handshake as the responder
 func (t *Transport) SecureInbound(ctx context.Context, insecure net.Conn) (sec.SecureConn, error) {
 	s, err := newSecureSession(ctx, t.LocalID, t.PrivateKey, t.NoisePrivateKey, insecure, "", t.NoiseStaticKeyCache, t.NoisePipesSupport, false)
@@ -42,11 +50,13 @@ func (t *Transport) SecureInbound(ctx context.Context, insecure net.Conn) (sec.S
 func (t *Transport) SecureOutbound(ctx context.Context, insecure net.Conn, p peer.ID) (sec.SecureConn, error) {
 	s, err := newSecureSession(ctx, t.LocalID, t.PrivateKey, t.NoisePrivateKey, insecure, p, t.NoiseStaticKeyCache, t.NoisePipesSupport, true)
 	if err != nil {
+		log.Debugf("err: %s\n", err)
 		return s, err
 	}
-
+	log.Debug("created secret session")
 	t.NoiseStaticKeyCache = s.NoiseStaticKeyCache()
 	t.NoisePrivateKey = s.NoisePrivateKey()
 	t.NoisePublicKey = s.local.noiseKey
+	log.Debug("Retrieved keys")
 	return s, nil
 }
