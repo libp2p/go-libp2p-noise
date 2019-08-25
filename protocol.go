@@ -203,6 +203,7 @@ func (s *secureSession) Read(buf []byte) (int, error) {
 	}
 
 	l, err := s.readLength()
+
 	if err != nil {
 		//log.Error("read length err", err)
 		return 0, err
@@ -211,12 +212,14 @@ func (s *secureSession) Read(buf []byte) (int, error) {
 	ciphertext := make([]byte, l)
 
 	_, err = s.rw.Read(ciphertext)
+
 	if err != nil {
 		//log.Error("read ciphertext err", err)
 		return 0, err
 	}
 
 	plaintext, err := s.Decrypt(ciphertext)
+
 	if err != nil {
 		//log.Error("decrypt err", err)
 		return 0, err
@@ -258,6 +261,7 @@ func (s *secureSession) SetWriteDeadline(t time.Time) error {
 }
 
 func (s *secureSession) Write(in []byte) (int, error) {
+
 	ciphertext, err := s.Encrypt(in)
 	if err != nil {
 		//log.Error("encrypt error", err)
