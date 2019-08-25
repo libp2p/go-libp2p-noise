@@ -50,13 +50,11 @@ func (t *Transport) SecureInbound(ctx context.Context, insecure net.Conn) (sec.S
 func (t *Transport) SecureOutbound(ctx context.Context, insecure net.Conn, p peer.ID) (sec.SecureConn, error) {
 	s, err := newSecureSession(ctx, t.LocalID, t.PrivateKey, t.NoisePrivateKey, insecure, p, t.NoiseStaticKeyCache, t.NoisePipesSupport, true)
 	if err != nil {
-		log.Debugf("err: %s\n", err)
 		return s, err
 	}
-	log.Debug("created secret session")
+
 	t.NoiseStaticKeyCache = s.NoiseStaticKeyCache()
 	t.NoisePrivateKey = s.NoisePrivateKey()
 	t.NoisePublicKey = s.local.noiseKey
-	log.Debug("Retrieved keys")
 	return s, nil
 }
