@@ -215,7 +215,9 @@ func (s *secureSession) runHandshake_xx(ctx context.Context, fallback bool, init
 			log.Error("stage 2 initiator verify payload", "err", err)
 		}
 
-		s.noiseStaticKeyCache[s.remotePeer] = s.xx_ns.RemoteKey()
+		if s.noisePipesSupport {
+			s.noiseStaticKeyCache[s.remotePeer] = s.xx_ns.RemoteKey()
+		}
 
 	} else {
 
@@ -278,8 +280,6 @@ func (s *secureSession) runHandshake_xx(ctx context.Context, fallback bool, init
 
 		log.Debugf("stage 2 responder", "plaintext", plaintext, "remote key", s.xx_ns.RemoteKey())
 
-		//copy(s.remote.noiseKey[:], plaintext)
-
 		// unmarshal payload
 		err = proto.Unmarshal(plaintext, nhp)
 		if err != nil {
@@ -308,7 +308,9 @@ func (s *secureSession) runHandshake_xx(ctx context.Context, fallback bool, init
 			return fmt.Errorf("stage 2 responder fail: %s", err)
 		}
 
-		s.noiseStaticKeyCache[s.remotePeer] = s.remote.noiseKey
+		if s.noisePipesSupport {
+			s.noiseStaticKeyCache[s.remotePeer] = s.remote.noiseKey
+		}
 		log.Debugf("stage 2 responder", "remote key", s.remote.noiseKey)
 	}
 

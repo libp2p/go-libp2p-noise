@@ -14,7 +14,7 @@ import (
 	"io"
 	mrand "math/rand"
 	"testing"
-	"time"
+	//"time"
 )
 
 func generateKey(seed int64) (crypto.PrivKey, error) {
@@ -102,18 +102,17 @@ func TestLibp2pIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	stream, err := ha.NewStream(ctx, hb.ID(), ID)
-	if err != nil {
-		t.Fatal(err)
-	}
+	// stream, err := ha.NewStream(ctx, hb.ID(), ID)
+	// if err != nil {
+	// 	t.Fatal(err)
+	// }
 
-	_, err = stream.Write([]byte("hello\n"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	// _, err = stream.Write([]byte("hello\n"))
+	// if err != nil {
+	// 	t.Fatal(err)
+	// }
 
-	time.Sleep(5 * time.Second)
-	fmt.Println("fin")
+	// fmt.Println("fin")
 }
 
 func handleStream(stream net.Stream) {

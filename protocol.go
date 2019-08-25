@@ -138,7 +138,7 @@ func (s *secureSession) verifyPayload(payload *pb.NoiseHandshakePayload, noiseKe
 
 func (s *secureSession) runHandshake(ctx context.Context) error {
 	// if we have the peer's noise static key and we support noise pipes, we can try IK
-	if s.noiseStaticKeyCache[s.remotePeer] != [32]byte{} || s.noisePipesSupport {
+	if s.noiseStaticKeyCache[s.remotePeer] != [32]byte{} && s.noisePipesSupport {
 		// known static key for peer, try IK  //
 
 		buf, err := s.runHandshake_ik(ctx)
@@ -192,10 +192,10 @@ func (s *secureSession) Read(buf []byte) (int, error) {
 	//return s.insecure.Read(buf)
 	l := len(buf)
 
-	log.Debug("length", l)
+	//log.Debug("length", l)
 
 	if l <= len(s.msgBuffer) {
-		log.Debug("length < msgbuffer")
+		//log.Debug("length < msgbuffer")
 
 		copy(buf, s.msgBuffer)
 		s.msgBuffer = s.msgBuffer[l:]
@@ -204,7 +204,7 @@ func (s *secureSession) Read(buf []byte) (int, error) {
 
 	l, err := s.readLength()
 	if err != nil {
-		log.Error("read length err", err)
+		//log.Error("read length err", err)
 		return 0, err
 	}
 
@@ -212,13 +212,13 @@ func (s *secureSession) Read(buf []byte) (int, error) {
 
 	_, err = s.rw.Read(ciphertext)
 	if err != nil {
-		log.Error("read ciphertext err", err)
+		//log.Error("read ciphertext err", err)
 		return 0, err
 	}
 
 	plaintext, err := s.Decrypt(ciphertext)
 	if err != nil {
-		log.Error("decrypt err", err)
+		//log.Error("decrypt err", err)
 		return 0, err
 	}
 
@@ -228,7 +228,7 @@ func (s *secureSession) Read(buf []byte) (int, error) {
 		s.msgBuffer = append(s.msgBuffer, plaintext[len(buf):]...)
 	}
 
-	log.Debug("read", "plaintext", plaintext, len(plaintext))
+	//log.Debug("read", "plaintext", plaintext, len(plaintext))
 
 	return c, nil
 }
