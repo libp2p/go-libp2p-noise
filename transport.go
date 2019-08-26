@@ -17,11 +17,13 @@ const ID = "/noise/0.0.1"
 
 var _ sec.SecureTransport = &Transport{}
 
+// Keypair is a noise ed25519 public-private keypair
 type Keypair struct {
 	public_key  [32]byte
 	private_key [32]byte
 }
 
+// GenerateKeypair creates a new ed25519 keypair
 func GenerateKeypair() *Keypair {
 	var public_key [32]byte
 	var private_key [32]byte
@@ -40,6 +42,8 @@ type Transport struct {
 	NoiseKeypair        *Keypair
 }
 
+// NewTransport creates a new noise transport and can be configured to use noise pipes and a given
+// noise ed25519 keypair
 func NewTransport(localID peer.ID, privkey crypto.PrivKey, noisePipesSupport bool, kp *Keypair) *Transport {
 	if kp == nil {
 		kp = GenerateKeypair()

@@ -18,9 +18,9 @@ import (
 	xx "github.com/ChainSafe/go-libp2p-noise/xx"
 )
 
-var log = logging.Logger("noise")
-
 const payload_string = "noise-libp2p-static-key:"
+
+var log = logging.Logger("noise")
 
 type secureSession struct {
 	insecure net.Conn
@@ -101,6 +101,10 @@ func (s *secureSession) NoiseStaticKeyCache() map[peer.ID]([32]byte) {
 	return s.noiseStaticKeyCache
 }
 
+func (s *secureSession) NoisePublicKey() [32]byte {
+	return s.noiseKeypair.public_key
+}
+
 func (s *secureSession) NoisePrivateKey() [32]byte {
 	return s.noiseKeypair.private_key
 }
@@ -132,7 +136,7 @@ func (s *secureSession) verifyPayload(payload *pb.NoiseHandshakePayload, noiseKe
 	sig := payload.GetNoiseStaticKeySignature()
 	msg := append([]byte(payload_string), noiseKey[:]...)
 
-	log.Debugf("verifyPayload", "msg", fmt.Sprintf("%x", msg))
+	log.Debugf("verifyPayload msg=%x", msg)
 
 	ok, err := s.RemotePublicKey().Verify(msg, sig)
 	if err != nil {
@@ -145,21 +149,18 @@ func (s *secureSession) verifyPayload(payload *pb.NoiseHandshakePayload, noiseKe
 }
 
 func (s *secureSession) runHandshake(ctx context.Context) error {
-
 	// setup libp2p keys
 	localKeyRaw, err := s.LocalPublicKey().Bytes()
 	if err != nil {
-		return fmt.Errorf("err getting raw pubkey: %s", err)
+		return fmt.Errorf("runHandshake err getting raw pubkey: %s", err)
 	}
-
-	log.Debugf("xx handshake", "local key", localKeyRaw, "len", len(localKeyRaw))
 
 	// sign noise data for payload
 	noise_pub := s.noiseKeypair.public_key
 	signedPayload, err := s.localKey.Sign(append([]byte(payload_string), noise_pub[:]...))
 	if err != nil {
-		log.Error("xx handshake signing payload", "err", err)
-		return fmt.Errorf("err signing payload: %s", err)
+		log.Errorf("runHandshake signing payload err=%s", err)
+		return fmt.Errorf("runHandshake signing payload err=%s", err)
 	}
 
 	// create payload
@@ -168,23 +169,24 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 	payload.NoiseStaticKeySignature = signedPayload
 	payloadEnc, err := proto.Marshal(payload)
 	if err != nil {
-		log.Error("xx handshake marshal payload", "err", err)
-		return fmt.Errorf("proto marshal payload fail: %s", err)
+		log.Errorf("runHandshake marshal payload err=%s", err)
+		return fmt.Errorf("runHandshake proto marshal payload err=%s", err)
 	}
 
-	// if we have the peer's noise static key and we support noise pipes, we can try IK
+	// if we have the peer's noise static key (and we're the initiator,) and we support noise pipes,
+	// we can try IK first. if we support noise pipes and we're not the initiator, try IK first
+	// otherwise, default to XX
 	if (!s.initiator && s.noiseStaticKeyCache[s.remotePeer] != [32]byte{}) && s.noisePipesSupport {
-		// known static key for peer, try IK  //
-
+		// known static key for peer, try IK
 		buf, err := s.runHandshake_ik(ctx, payloadEnc)
 		if err != nil {
-			log.Error("runHandshake_ik", "err", err)
+			log.Error("runHandshake ik err=%s", err)
 
 			// IK failed, pipe to XXfallback
 			err = s.runHandshake_xx(ctx, true, payloadEnc, buf)
 			if err != nil {
-				log.Error("runHandshake_xx", "err", err)
-				return fmt.Errorf("runHandshake_xx err %s", err)
+				log.Error("runHandshake xx err=err", err)
+				return fmt.Errorf("runHandshake xx err=%s", err)
 			}
 
 			s.xx_complete = true
@@ -193,11 +195,10 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 		s.ik_complete = true
 
 	} else {
-		// unknown static key for peer, try XX //
-
+		// unknown static key for peer, try XX
 		err := s.runHandshake_xx(ctx, false, payloadEnc, nil)
 		if err != nil {
-			log.Error("runHandshake_xx", "err", err)
+			log.Error("runHandshake xx err=%s", err)
 			return err
 		}
 
@@ -226,42 +227,38 @@ func (s *secureSession) LocalPublicKey() crypto.PubKey {
 func (s *secureSession) Read(buf []byte) (int, error) {
 	l := len(buf)
 
-	// if the session has previously
+	// if we have previously unread bytes, and they fit into the buf, copy them over and return
 	if l <= len(s.msgBuffer) {
 		copy(buf, s.msgBuffer)
 		s.msgBuffer = s.msgBuffer[l:]
 		return l, nil
 	}
 
+	// read length of encrypted message
 	l, err := s.readLength()
-
 	if err != nil {
 		return 0, err
 	}
 
+	// read and decrypt ciphertext
 	ciphertext := make([]byte, l)
-
 	_, err = s.insecure.Read(ciphertext)
-
 	if err != nil {
 		log.Error("read ciphertext err", err)
 		return 0, err
 	}
 
 	plaintext, err := s.Decrypt(ciphertext)
-
 	if err != nil {
 		log.Error("decrypt err", err)
 		return 0, err
 	}
 
-	c := copy(buf, plaintext)
-
-	// if buffer isn't large enough to store the entire message, save the extra message data
-	// into the session's message buffer
-	if c < len(plaintext) {
-		s.msgBuffer = append(s.msgBuffer, plaintext[len(buf):]...)
-	}
+	// append plaintext to message buffer, copy over what can fit in the buf
+	// then advance message buffer to remove what was copied
+	s.msgBuffer = append(s.msgBuffer, plaintext...)
+	c := copy(buf, s.msgBuffer)
+	s.msgBuffer = s.msgBuffer[c:]
 
 	return c, nil
 }
