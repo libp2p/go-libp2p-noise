@@ -1,11 +1,11 @@
 package noise
 
 import (
-	"bufio"
 	"context"
 	"encoding/binary"
 	"fmt"
 	"net"
+	"sync"
 	"time"
 
 	logging "github.com/ipfs/go-log"
@@ -45,12 +45,12 @@ type secureSession struct {
 
 	noisePrivateKey [32]byte
 
-	rw        bufio.ReadWriter
 	msgBuffer []byte
+	rwLock    sync.Mutex
 }
 
 type peerInfo struct {
-	noiseKey  [32]byte // static noise key
+	noiseKey  [32]byte // static noise public key
 	libp2pKey crypto.PubKey
 }
 
@@ -78,11 +78,8 @@ func newSecureSession(ctx context.Context, local peer.ID, privKey crypto.PrivKey
 		noisePipesSupport:   noisePipesSupport,
 		noiseStaticKeyCache: noiseStaticKeyCache,
 		noisePrivateKey:     noisePrivateKey,
-		rw:                  *bufio.NewReadWriter(bufio.NewReader(insecure), bufio.NewWriter(insecure)),
 		msgBuffer:           []byte{},
 	}
-
-	s.rw.Writer.Flush()
 
 	err := s.runHandshake(ctx)
 
@@ -189,13 +186,10 @@ func (s *secureSession) LocalPublicKey() crypto.PubKey {
 }
 
 func (s *secureSession) Read(buf []byte) (int, error) {
-	//return s.insecure.Read(buf)
 	l := len(buf)
 
-	//log.Debug("length", l)
-
 	if l <= len(s.msgBuffer) {
-		//log.Debug("length < msgbuffer")
+		log.Debug("length < msgbuffer")
 
 		copy(buf, s.msgBuffer)
 		s.msgBuffer = s.msgBuffer[l:]
@@ -205,23 +199,22 @@ func (s *secureSession) Read(buf []byte) (int, error) {
 	l, err := s.readLength()
 
 	if err != nil {
-		//log.Error("read length err", err)
 		return 0, err
 	}
 
 	ciphertext := make([]byte, l)
 
-	_, err = s.rw.Read(ciphertext)
+	_, err = s.insecure.Read(ciphertext)
 
 	if err != nil {
-		//log.Error("read ciphertext err", err)
+		log.Error("read ciphertext err", err)
 		return 0, err
 	}
 
 	plaintext, err := s.Decrypt(ciphertext)
 
 	if err != nil {
-		//log.Error("decrypt err", err)
+		log.Error("decrypt err", err)
 		return 0, err
 	}
 
@@ -230,8 +223,6 @@ func (s *secureSession) Read(buf []byte) (int, error) {
 	if c < len(plaintext) {
 		s.msgBuffer = append(s.msgBuffer, plaintext[len(buf):]...)
 	}
-
-	//log.Debug("read", "plaintext", plaintext, len(plaintext))
 
 	return c, nil
 }
@@ -261,16 +252,18 @@ func (s *secureSession) SetWriteDeadline(t time.Time) error {
 }
 
 func (s *secureSession) Write(in []byte) (int, error) {
+	s.rwLock.Lock()
+	defer s.rwLock.Unlock()
 
 	ciphertext, err := s.Encrypt(in)
 	if err != nil {
-		//log.Error("encrypt error", err)
+		log.Error("encrypt error", err)
 		return 0, err
 	}
 
 	err = s.writeLength(len(ciphertext))
 	if err != nil {
-		//log.Error("write length err", err)
+		log.Error("write length err", err)
 		return 0, err
 	}
 
