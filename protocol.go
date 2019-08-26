@@ -43,7 +43,7 @@ type secureSession struct {
 	noisePipesSupport   bool
 	noiseStaticKeyCache map[peer.ID]([32]byte)
 
-	noisePrivateKey [32]byte
+	noiseKeypair *Keypair
 
 	msgBuffer []byte
 	rwLock    sync.Mutex
@@ -60,12 +60,16 @@ type peerInfo struct {
 //
 // With noise pipes off, we always do XX
 // With noise pipes on, we first try IK, if that fails, move to XXfallback
-func newSecureSession(ctx context.Context, local peer.ID, privKey crypto.PrivKey, noisePrivateKey [32]byte,
+func newSecureSession(ctx context.Context, local peer.ID, privKey crypto.PrivKey, kp *Keypair,
 	insecure net.Conn, remote peer.ID, noiseStaticKeyCache map[peer.ID]([32]byte),
 	noisePipesSupport bool, initiator bool) (*secureSession, error) {
 
 	if noiseStaticKeyCache == nil {
 		noiseStaticKeyCache = make(map[peer.ID]([32]byte))
+	}
+
+	if kp == nil {
+		kp = GenerateKeypair()
 	}
 
 	s := &secureSession{
@@ -77,8 +81,8 @@ func newSecureSession(ctx context.Context, local peer.ID, privKey crypto.PrivKey
 		remotePeer:          remote,
 		noisePipesSupport:   noisePipesSupport,
 		noiseStaticKeyCache: noiseStaticKeyCache,
-		noisePrivateKey:     noisePrivateKey,
 		msgBuffer:           []byte{},
+		noiseKeypair:		kp,
 	}
 
 	err := s.runHandshake(ctx)
@@ -91,7 +95,7 @@ func (s *secureSession) NoiseStaticKeyCache() map[peer.ID]([32]byte) {
 }
 
 func (s *secureSession) NoisePrivateKey() [32]byte {
-	return s.noisePrivateKey
+	return s.noiseKeypair.private_key
 }
 
 func (s *secureSession) readLength() (int, error) {
@@ -135,7 +139,7 @@ func (s *secureSession) verifyPayload(payload *pb.NoiseHandshakePayload, noiseKe
 
 func (s *secureSession) runHandshake(ctx context.Context) error {
 	// if we have the peer's noise static key and we support noise pipes, we can try IK
-	if s.noiseStaticKeyCache[s.remotePeer] != [32]byte{} && s.noisePipesSupport {
+	if s.noiseStaticKeyCache[s.remotePeer] != [32]byte{} || s.noisePipesSupport {
 		// known static key for peer, try IK  //
 
 		buf, err := s.runHandshake_ik(ctx)
@@ -188,9 +192,8 @@ func (s *secureSession) LocalPublicKey() crypto.PubKey {
 func (s *secureSession) Read(buf []byte) (int, error) {
 	l := len(buf)
 
+	// if the session has previously 
 	if l <= len(s.msgBuffer) {
-		log.Debug("length < msgbuffer")
-
 		copy(buf, s.msgBuffer)
 		s.msgBuffer = s.msgBuffer[l:]
 		return l, nil
@@ -220,6 +223,8 @@ func (s *secureSession) Read(buf []byte) (int, error) {
 
 	c := copy(buf, plaintext)
 
+	// if buffer isn't large enough to store the entire message, save the extra message data
+	// into the session's message buffer
 	if c < len(plaintext) {
 		s.msgBuffer = append(s.msgBuffer, plaintext[len(buf):]...)
 	}

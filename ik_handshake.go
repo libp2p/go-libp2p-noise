@@ -80,17 +80,14 @@ func (s *secureSession) ik_recvHandshakeMessage(initial_stage bool) (buf []byte,
 
 // returns last successful message upon error
 func (s *secureSession) runHandshake_ik(ctx context.Context) ([]byte, error) {
-	var kp ik.Keypair
+	kp := ik.NewKeypair(s.noiseKeypair.public_key, s.noiseKeypair.private_key)
 
-	if s.noisePrivateKey == [32]byte{} {
-		// generate local static noise key
-		kp = ik.GenerateKeypair()
-		s.noisePrivateKey = kp.PrivKey()
-		log.Debugf("ik generate new noise kp", "initiator", s.initiator)
-	} else {
-		pub := ik.GeneratePublicKey(s.noisePrivateKey)
-		kp = ik.NewKeypair(pub, s.noisePrivateKey)
-	}
+	// if s.noiseKeypair == nil {
+	// 	// generate local static noise key
+	// 	s.noiseKeypair = GenerateKeypair()
+	// } else {
+	// 	kp = GenerateKeypair().(ik.Keypair)
+	// }
 
 	s.local.noiseKey = kp.PubKey()
 

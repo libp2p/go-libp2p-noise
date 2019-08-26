@@ -80,17 +80,15 @@ func (s *secureSession) xx_recvHandshakeMessage(initial_stage bool) (buf []byte,
 
 // if fallback = true, use msg as initial message in stage 0
 func (s *secureSession) runHandshake_xx(ctx context.Context, fallback bool, initialMsg []byte) (err error) {
-	var kp xx.Keypair
+	kp := xx.NewKeypair(s.noiseKeypair.public_key, s.noiseKeypair.private_key)
 
-	if s.noisePrivateKey == [32]byte{} {
-		// generate local static noise key
-		kp = xx.GenerateKeypair()
-		s.noisePrivateKey = kp.PrivKey()
-		log.Debugf("xx generate new noise kp", "initiator", s.initiator)
-	} else {
-		pub := xx.GeneratePublicKey(s.noisePrivateKey)
-		kp = xx.NewKeypair(pub, s.noisePrivateKey)
-	}
+	// if s.noiseKeypair == nil {
+	// 	// generate local static noise key
+	// 	s.noiseKeypair = GenerateKeypair()
+	// } else {
+	// 	pub := xx.GeneratePublicKey(s.noisePrivateKey)
+	// 	kp = xx.NewKeypair(pub, s.noisePrivateKey)
+	// }
 
 	s.local.noiseKey = kp.PubKey()
 
@@ -241,6 +239,10 @@ func (s *secureSession) runHandshake_xx(ctx context.Context, fallback bool, init
 		} else {
 			var msgbuf *xx.MessageBuffer
 			msgbuf, err = xx.Decode1(initialMsg)
+			if err != nil {
+				log.Error("xx_recvHandshakeMessage err", err)
+				return err
+			}
 			xx_msgbuf := xx.NewMessageBuffer(msgbuf.NE(), nil, nil)
 
 			log.Debugf("xx_recvHandshakeMessage", "initiator", s.initiator, "msgbuf", msgbuf, "modified_msgbuf", xx_msgbuf, "buf len", len(buf))

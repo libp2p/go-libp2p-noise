@@ -175,8 +175,8 @@ func (mb *MessageBuffer) Encode1() []byte {
 
 // Decodes initial message (stage 0) into MessageBuffer
 func Decode0(in []byte) (*MessageBuffer, error) {
-	if len(in) < 32 {
-		return nil, errors.New("cannot decode stage 0 MessageBuffer: length less than 32 bytes")
+	if len(in) < 80 {
+		return nil, errors.New("cannot decode stage 0 MessageBuffer: length less than 80 bytes")
 	}
 
 	mb := new(MessageBuffer)
@@ -189,8 +189,8 @@ func Decode0(in []byte) (*MessageBuffer, error) {
 
 // Decodes messages at stage 1 into MessageBuffer
 func Decode1(in []byte) (*MessageBuffer, error) {
-	if len(in) < 80 {
-		return nil, errors.New("cannot decode stage 1 MessageBuffer: length less than 96 bytes")
+	if len(in) < 32 {
+		return nil, errors.New("cannot decode stage 1 MessageBuffer: length less than 32 bytes")
 	}
 
 	mb := new(MessageBuffer)
