@@ -33,7 +33,7 @@ func generateKey(seed int64) (crypto.PrivKey, error) {
 	return priv, nil
 }
 
-func makeNode(t *testing.T, seed int64, port int) (host.Host, error) {
+func makeNode(t *testing.T, seed int64, port int, kp *Keypair) (host.Host, error) {
 	priv, err := generateKey(seed)
 	if err != nil {
 		t.Fatal(err)
@@ -44,7 +44,7 @@ func makeNode(t *testing.T, seed int64, port int) (host.Host, error) {
 		t.Fatal(err)
 	}
 
-	tpt := NewTransport(pid, priv, false, nil)
+	tpt := NewTransport(pid, priv, false, kp)
 
 	ip := "0.0.0.0"
 	addr, err := ma.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%d", ip, port))
@@ -99,7 +99,7 @@ func makeNodePipes(t *testing.T, seed int64, port int, rpid peer.ID, rpubkey [32
 func TestLibp2pIntegration_NoPipes(t *testing.T) {
 	ctx := context.Background()
 
-	ha, err := makeNode(t, 1, 33333)
+	ha, err := makeNode(t, 1, 33333, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +108,7 @@ func TestLibp2pIntegration_NoPipes(t *testing.T) {
 
 	//fmt.Printf("ha: %s/p2p/%s\n", ha.Addrs()[1].String(), ha.ID())
 
-	hb, err := makeNode(t, 2, 34343)
+	hb, err := makeNode(t, 2, 34343, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -209,7 +209,9 @@ func TestLibp2pIntegration_WithPipes(t *testing.T) {
 func TestLibp2pIntegration_XXFallback(t *testing.T) {
 	ctx := context.Background()
 
-	ha, err := makeNodePipes(t, 1, 33333, "", [32]byte{}, nil)
+	kpa := GenerateKeypair()
+
+	ha, err := makeNode(t, 1, 33333, kpa)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,7 +220,7 @@ func TestLibp2pIntegration_XXFallback(t *testing.T) {
 
 	//fmt.Printf("ha: %s/p2p/%s\n", ha.Addrs()[1].String(), ha.ID())
 
-	hb, err := makeNode(t, 2, 34343)
+	hb, err := makeNodePipes(t, 2, 34343, ha.ID(), kpa.public_key, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -228,7 +230,7 @@ func TestLibp2pIntegration_XXFallback(t *testing.T) {
 	ha.SetStreamHandler(ID, handleStream)
 	hb.SetStreamHandler(ID, handleStream)
 
-	addr, err := ma.NewMultiaddr(fmt.Sprintf("%s/p2p/%s", ha.Addrs()[0].String(), ha.ID()))
+	addr, err := ma.NewMultiaddr(fmt.Sprintf("%s/p2p/%s", hb.Addrs()[0].String(), hb.ID()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -240,7 +242,7 @@ func TestLibp2pIntegration_XXFallback(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = hb.Connect(ctx, *addrInfo)
+	err = ha.Connect(ctx, *addrInfo)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -273,5 +275,5 @@ func handleStream(stream net.Stream) {
 		fmt.Println("stream err", err)
 		return
 	}
-	fmt.Println("got msg:", msg)
+	fmt.Printf("got msg: %s", msg)
 }

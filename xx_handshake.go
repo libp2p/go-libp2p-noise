@@ -79,48 +79,10 @@ func (s *secureSession) xx_recvHandshakeMessage(initial_stage bool) (buf []byte,
 }
 
 // if fallback = true, use msg as initial message in stage 0
-func (s *secureSession) runHandshake_xx(ctx context.Context, fallback bool, initialMsg []byte) (err error) {
+func (s *secureSession) runHandshake_xx(ctx context.Context, fallback bool, payload []byte, initialMsg []byte) (err error) {
 	kp := xx.NewKeypair(s.noiseKeypair.public_key, s.noiseKeypair.private_key)
 
-	// if s.noiseKeypair == nil {
-	// 	// generate local static noise key
-	// 	s.noiseKeypair = GenerateKeypair()
-	// } else {
-	// 	pub := xx.GeneratePublicKey(s.noisePrivateKey)
-	// 	kp = xx.NewKeypair(pub, s.noisePrivateKey)
-	// }
-
-	s.local.noiseKey = kp.PubKey()
-
 	log.Debugf("xx handshake", "pubkey", kp.PubKey(), "initiator", s.initiator)
-
-	// setup libp2p keys
-	localKeyRaw, err := s.LocalPublicKey().Bytes()
-	if err != nil {
-		return fmt.Errorf("err getting raw pubkey: %s", err)
-	}
-
-	log.Debugf("xx handshake", "local key", localKeyRaw, "len", len(localKeyRaw))
-
-	// sign noise data for payload
-	noise_pub := kp.PubKey()
-	signedPayload, err := s.localKey.Sign(append([]byte(payload_string), noise_pub[:]...))
-	if err != nil {
-		log.Error("xx handshake signing payload", "err", err)
-		return fmt.Errorf("err signing payload: %s", err)
-	}
-
-	s.local.noiseKey = noise_pub
-
-	// create payload
-	payload := new(pb.NoiseHandshakePayload)
-	payload.Libp2PKey = localKeyRaw
-	payload.NoiseStaticKeySignature = signedPayload
-	payloadEnc, err := proto.Marshal(payload)
-	if err != nil {
-		log.Error("xx handshake marshal payload", "err", err)
-		return fmt.Errorf("proto marshal payload fail: %s", err)
-	}
 
 	// new XX noise session
 	s.xx_ns = xx.InitSession(s.initiator, s.prologue, kp, [32]byte{})
@@ -180,7 +142,7 @@ func (s *secureSession) runHandshake_xx(ctx context.Context, fallback bool, init
 
 		// stage 2 //
 
-		err = s.xx_sendHandshakeMessage(payloadEnc, false)
+		err = s.xx_sendHandshakeMessage(payload, false)
 		if err != nil {
 			return fmt.Errorf("stage 2 intiator fail: %s", err)
 		}
@@ -263,7 +225,7 @@ func (s *secureSession) runHandshake_xx(ctx context.Context, fallback bool, init
 
 		// stage 1 //
 
-		err = s.xx_sendHandshakeMessage(payloadEnc, false)
+		err = s.xx_sendHandshakeMessage(payload, false)
 		if err != nil {
 			return fmt.Errorf("stage 1 responder fail: %s", err)
 		}

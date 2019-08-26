@@ -3,10 +3,10 @@ package noise
 import (
 	"context"
 	"fmt"
-	proto "github.com/gogo/protobuf/proto"
 
 	ik "github.com/ChainSafe/go-libp2p-noise/ik"
 	pb "github.com/ChainSafe/go-libp2p-noise/pb"
+	proto "github.com/gogo/protobuf/proto"
 )
 
 func (s *secureSession) ik_sendHandshakeMessage(payload []byte, initial_stage bool) error {
@@ -79,43 +79,34 @@ func (s *secureSession) ik_recvHandshakeMessage(initial_stage bool) (buf []byte,
 }
 
 // returns last successful message upon error
-func (s *secureSession) runHandshake_ik(ctx context.Context) ([]byte, error) {
+func (s *secureSession) runHandshake_ik(ctx context.Context, payload []byte) ([]byte, error) {
 	kp := ik.NewKeypair(s.noiseKeypair.public_key, s.noiseKeypair.private_key)
-
-	// if s.noiseKeypair == nil {
-	// 	// generate local static noise key
-	// 	s.noiseKeypair = GenerateKeypair()
-	// } else {
-	// 	kp = GenerateKeypair().(ik.Keypair)
-	// }
-
-	s.local.noiseKey = kp.PubKey()
 
 	log.Debugf("ik handshake", "noise pubkey", kp.PubKey())
 
-	// setup libp2p keys
-	localKeyRaw, err := s.LocalPublicKey().Bytes()
-	if err != nil {
-		return nil, fmt.Errorf("err getting raw pubkey: %s", err)
-	}
+	// // setup libp2p keys
+	// localKeyRaw, err := s.LocalPublicKey().Bytes()
+	// if err != nil {
+	// 	return nil, fmt.Errorf("err getting raw pubkey: %s", err)
+	// }
 
-	log.Debugf("ik handshake", "local libp2p key", localKeyRaw, "len", len(localKeyRaw))
+	// log.Debugf("ik handshake", "local libp2p key", localKeyRaw, "len", len(localKeyRaw))
 
-	// sign noise data for payload
-	noise_pub := kp.PubKey()
-	signedPayload, err := s.localKey.Sign(append([]byte(payload_string), noise_pub[:]...))
-	if err != nil {
-		return nil, fmt.Errorf("err signing payload: %s", err)
-	}
+	// // sign noise data for payload
+	// noise_pub := kp.PubKey()
+	// signedPayload, err := s.localKey.Sign(append([]byte(payload_string), noise_pub[:]...))
+	// if err != nil {
+	// 	return nil, fmt.Errorf("err signing payload: %s", err)
+	// }
 
-	// create payload
-	payload := new(pb.NoiseHandshakePayload)
-	payload.Libp2PKey = localKeyRaw
-	payload.NoiseStaticKeySignature = signedPayload
-	payloadEnc, err := proto.Marshal(payload)
-	if err != nil {
-		return nil, fmt.Errorf("proto marshal payload fail: %s", err)
-	}
+	// // create payload
+	// payload := new(pb.NoiseHandshakePayload)
+	// payload.Libp2PKey = localKeyRaw
+	// payload.NoiseStaticKeySignature = signedPayload
+	// payloadEnc, err := proto.Marshal(payload)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("proto marshal payload fail: %s", err)
+	// }
 
 	// new XX noise session
 	s.ik_ns = ik.InitSession(s.initiator, s.prologue, kp, s.noiseStaticKeyCache[s.remotePeer])
@@ -123,7 +114,7 @@ func (s *secureSession) runHandshake_ik(ctx context.Context) ([]byte, error) {
 
 	if s.initiator {
 		// stage 0 //
-		err := s.ik_sendHandshakeMessage(payloadEnc, true)
+		err := s.ik_sendHandshakeMessage(payload, true)
 		if err != nil {
 			log.Error("stage 0 initiator send", "err", err)
 			return nil, fmt.Errorf("stage 0 initiator fail: %s", err)
@@ -171,11 +162,9 @@ func (s *secureSession) runHandshake_ik(ctx context.Context) ([]byte, error) {
 		// stage 0 //
 
 		log.Debugf("ik responder", "noiseKey", kp.PubKey())
-		var buf, plaintext []byte
-		var valid bool
 
 		// read message
-		buf, plaintext, valid, err = s.ik_recvHandshakeMessage(true)
+		buf, plaintext, valid, err := s.ik_recvHandshakeMessage(true)
 		if err != nil {
 			return buf, fmt.Errorf("stage 0 responder fail: %s", err)
 		}
@@ -214,7 +203,7 @@ func (s *secureSession) runHandshake_ik(ctx context.Context) ([]byte, error) {
 
 		// stage 1 //
 
-		err := s.ik_sendHandshakeMessage(payloadEnc, false)
+		err = s.ik_sendHandshakeMessage(payload, false)
 		if err != nil {
 			log.Error("stage 1 responder send", "err", err)
 			return nil, fmt.Errorf("stage 1 responder fail: %s", err)

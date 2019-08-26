@@ -18,7 +18,7 @@ const ID = "/noise/0.0.1"
 var _ sec.SecureTransport = &Transport{}
 
 type Keypair struct {
-	public_key [32]byte
+	public_key  [32]byte
 	private_key [32]byte
 }
 
@@ -37,7 +37,7 @@ type Transport struct {
 	PrivateKey          crypto.PrivKey
 	NoisePipesSupport   bool
 	NoiseStaticKeyCache map[peer.ID]([32]byte)
-	NoiseKeypair 		*Keypair
+	NoiseKeypair        *Keypair
 }
 
 func NewTransport(localID peer.ID, privkey crypto.PrivKey, noisePipesSupport bool, kp *Keypair) *Transport {
@@ -49,7 +49,7 @@ func NewTransport(localID peer.ID, privkey crypto.PrivKey, noisePipesSupport boo
 		LocalID:           localID,
 		PrivateKey:        privkey,
 		NoisePipesSupport: noisePipesSupport,
-		NoiseKeypair: 		kp,
+		NoiseKeypair:      kp,
 	}
 }
 

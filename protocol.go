@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	proto "github.com/gogo/protobuf/proto"
 	logging "github.com/ipfs/go-log"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -72,6 +73,11 @@ func newSecureSession(ctx context.Context, local peer.ID, privKey crypto.PrivKey
 		kp = GenerateKeypair()
 	}
 
+	localPeerInfo := peerInfo{
+		noiseKey:  kp.public_key,
+		libp2pKey: privKey.GetPublic(),
+	}
+
 	s := &secureSession{
 		insecure:            insecure,
 		initiator:           initiator,
@@ -79,10 +85,11 @@ func newSecureSession(ctx context.Context, local peer.ID, privKey crypto.PrivKey
 		localKey:            privKey,
 		localPeer:           local,
 		remotePeer:          remote,
+		local:               localPeerInfo,
 		noisePipesSupport:   noisePipesSupport,
 		noiseStaticKeyCache: noiseStaticKeyCache,
 		msgBuffer:           []byte{},
-		noiseKeypair:		kp,
+		noiseKeypair:        kp,
 	}
 
 	err := s.runHandshake(ctx)
@@ -138,16 +145,43 @@ func (s *secureSession) verifyPayload(payload *pb.NoiseHandshakePayload, noiseKe
 }
 
 func (s *secureSession) runHandshake(ctx context.Context) error {
+
+	// setup libp2p keys
+	localKeyRaw, err := s.LocalPublicKey().Bytes()
+	if err != nil {
+		return fmt.Errorf("err getting raw pubkey: %s", err)
+	}
+
+	log.Debugf("xx handshake", "local key", localKeyRaw, "len", len(localKeyRaw))
+
+	// sign noise data for payload
+	noise_pub := s.noiseKeypair.public_key
+	signedPayload, err := s.localKey.Sign(append([]byte(payload_string), noise_pub[:]...))
+	if err != nil {
+		log.Error("xx handshake signing payload", "err", err)
+		return fmt.Errorf("err signing payload: %s", err)
+	}
+
+	// create payload
+	payload := new(pb.NoiseHandshakePayload)
+	payload.Libp2PKey = localKeyRaw
+	payload.NoiseStaticKeySignature = signedPayload
+	payloadEnc, err := proto.Marshal(payload)
+	if err != nil {
+		log.Error("xx handshake marshal payload", "err", err)
+		return fmt.Errorf("proto marshal payload fail: %s", err)
+	}
+
 	// if we have the peer's noise static key and we support noise pipes, we can try IK
-	if s.noiseStaticKeyCache[s.remotePeer] != [32]byte{} || s.noisePipesSupport {
+	if (!s.initiator && s.noiseStaticKeyCache[s.remotePeer] != [32]byte{}) && s.noisePipesSupport {
 		// known static key for peer, try IK  //
 
-		buf, err := s.runHandshake_ik(ctx)
+		buf, err := s.runHandshake_ik(ctx, payloadEnc)
 		if err != nil {
 			log.Error("runHandshake_ik", "err", err)
 
 			// IK failed, pipe to XXfallback
-			err = s.runHandshake_xx(ctx, true, buf)
+			err = s.runHandshake_xx(ctx, true, payloadEnc, buf)
 			if err != nil {
 				log.Error("runHandshake_xx", "err", err)
 				return fmt.Errorf("runHandshake_xx err %s", err)
@@ -161,7 +195,7 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 	} else {
 		// unknown static key for peer, try XX //
 
-		err := s.runHandshake_xx(ctx, false, nil)
+		err := s.runHandshake_xx(ctx, false, payloadEnc, nil)
 		if err != nil {
 			log.Error("runHandshake_xx", "err", err)
 			return err
@@ -192,7 +226,7 @@ func (s *secureSession) LocalPublicKey() crypto.PubKey {
 func (s *secureSession) Read(buf []byte) (int, error) {
 	l := len(buf)
 
-	// if the session has previously 
+	// if the session has previously
 	if l <= len(s.msgBuffer) {
 		copy(buf, s.msgBuffer)
 		s.msgBuffer = s.msgBuffer[l:]
