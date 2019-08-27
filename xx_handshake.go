@@ -23,7 +23,7 @@ func (s *secureSession) xx_sendHandshakeMessage(payload []byte, initial_stage bo
 
 	err := s.writeLength(len(encMsgBuf))
 	if err != nil {
-		log.Error("xx_sendHandshakeMessage initiator=%sverr=%s", s.initiator, err)
+		log.Error("xx_sendHandshakeMessage initiator=%v err=%s", s.initiator, err)
 		return fmt.Errorf("xx_sendHandshakeMessage write length err=%s", err)
 	}
 
@@ -84,7 +84,7 @@ func (s *secureSession) xx_recvHandshakeMessage(initial_stage bool) (buf []byte,
 func (s *secureSession) runHandshake_xx(ctx context.Context, fallback bool, payload []byte, initialMsg []byte) (err error) {
 	kp := xx.NewKeypair(s.noiseKeypair.public_key, s.noiseKeypair.private_key)
 
-	log.Debugf("runHandshake_xx initiator=%s fallback=%s pubkey=%x", s.initiator, fallback, kp.PubKey())
+	log.Debugf("runHandshake_xx initiator=%v fallback=%v pubkey=%x", s.initiator, fallback, kp.PubKey())
 
 	// new XX noise session
 	s.xx_ns = xx.InitSession(s.initiator, s.prologue, kp, [32]byte{})
@@ -127,16 +127,16 @@ func (s *secureSession) runHandshake_xx(ctx context.Context, fallback bool, payl
 			var msgbuf *xx.MessageBuffer
 			msgbuf, err = xx.Decode1(initialMsg)
 
-			log.Debugf("xx_recvHandshakeMessage stage=1 initiator=%s msgbuf=%v", s.initiator, msgbuf)
+			log.Debugf("xx_recvHandshakeMessage stage=1 initiator=%v msgbuf=%v", s.initiator, msgbuf)
 
 			if err != nil {
-				log.Debugf("xx_recvHandshakeMessage stage=1 initiator=%s decode_err=%s", s.initiator, err)
+				log.Debugf("xx_recvHandshakeMessage stage=1 initiator=%v decode_err=%s", s.initiator, err)
 				return fmt.Errorf("runHandshake_xx decode msg fail: %s", err)
 			}
 
 			s.xx_ns, plaintext, valid = xx.RecvMessage(s.xx_ns, msgbuf)
 			if !valid {
-				log.Errorf("xx_recvHandshakeMessage initiator=%s", s.initiator, "error", "validation fail")
+				log.Errorf("xx_recvHandshakeMessage initiator=%v", s.initiator, "error", "validation fail")
 				return fmt.Errorf("runHandshake_xx validation fail")
 			}
 

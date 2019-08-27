@@ -82,7 +82,7 @@ func (s *secureSession) ik_recvHandshakeMessage(initial_stage bool) (buf []byte,
 func (s *secureSession) runHandshake_ik(ctx context.Context, payload []byte) ([]byte, error) {
 	kp := ik.NewKeypair(s.noiseKeypair.public_key, s.noiseKeypair.private_key)
 
-	log.Debugf("runHandshake_ik initiator=%s pubkey=%x", kp.PubKey(), s.initiator)
+	log.Debugf("runHandshake_ik initiator=%v pubkey=%x", kp.PubKey(), s.initiator)
 
 	// new XX noise session
 	s.ik_ns = ik.InitSession(s.initiator, s.prologue, kp, s.noiseStaticKeyCache[s.remotePeer])

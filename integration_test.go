@@ -106,8 +106,6 @@ func TestLibp2pIntegration_NoPipes(t *testing.T) {
 
 	defer ha.Close()
 
-	//fmt.Printf("ha: %s/p2p/%s\n", ha.Addrs()[1].String(), ha.ID())
-
 	hb, err := makeNode(t, 2, 34343, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -162,8 +160,6 @@ func TestLibp2pIntegration_WithPipes(t *testing.T) {
 
 	defer ha.Close()
 
-	//fmt.Printf("ha: %s/p2p/%s\n", ha.Addrs()[1].String(), ha.ID())
-
 	hb, err := makeNodePipes(t, 2, 34343, ha.ID(), kpa.public_key, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -217,8 +213,6 @@ func TestLibp2pIntegration_XXFallback(t *testing.T) {
 	}
 
 	defer ha.Close()
-
-	//fmt.Printf("ha: %s/p2p/%s\n", ha.Addrs()[1].String(), ha.ID())
 
 	hb, err := makeNodePipes(t, 2, 34343, ha.ID(), kpa.public_key, nil)
 	if err != nil {
