@@ -411,7 +411,7 @@ func initializeInitiator(prologue []byte, s Keypair, rs [32]byte, psk [32]byte) 
 	var ss symmetricstate
 	var e Keypair
 	var re [32]byte
-	name := []byte("Noise_XX_25519_ChaChaPoly_BLAKE2s")
+	name := []byte("Noise_XX_25519_ChaChaPoly_SHA256")
 	ss = initializeSymmetric(name)
 	mixHash(&ss, prologue)
 	return handshakestate{ss, s, e, rs, re, psk}
@@ -421,7 +421,7 @@ func initializeResponder(prologue []byte, s Keypair, rs [32]byte, psk [32]byte) 
 	var ss symmetricstate
 	var e Keypair
 	var re [32]byte
-	name := []byte("Noise_XX_25519_ChaChaPoly_BLAKE2s")
+	name := []byte("Noise_XX_25519_ChaChaPoly_SHA256")
 	ss = initializeSymmetric(name)
 	mixHash(&ss, prologue)
 	return handshakestate{ss, s, e, rs, re, psk}
