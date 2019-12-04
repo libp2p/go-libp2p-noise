@@ -202,7 +202,7 @@ func (s *secureSession) runHandshake_xx(ctx context.Context, fallback bool, payl
 
 		} else {
 			var msgbuf *xx.MessageBuffer
-			msgbuf, err = xx.Decode1(initialMsg)
+			msgbuf, err = xx.Decode0(initialMsg)
 			if err != nil {
 				log.Errorf("runHandshake_xx recv msg err", err)
 				return err
