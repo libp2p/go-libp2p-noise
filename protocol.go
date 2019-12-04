@@ -194,10 +194,9 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 			}
 
 			s.xx_complete = true
+		} else {
+			s.ik_complete = true
 		}
-
-		s.ik_complete = true
-
 	} else {
 		// unknown static key for peer, try XX
 		err := s.runHandshake_xx(ctx, false, payloadEnc, nil)
