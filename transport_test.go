@@ -80,15 +80,15 @@ func newConnPair(t *testing.T) (net.Conn, net.Conn) {
 func connect(t *testing.T, initTransport, respTransport *Transport) (*secureSession, *secureSession) {
 	init, resp := newConnPair(t)
 
-	var respConn sec.SecureConn
-	var respErr error
+	var initConn sec.SecureConn
+	var initErr error
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		respConn, respErr = respTransport.SecureOutbound(context.TODO(), resp, initTransport.LocalID)
+		initConn, initErr = initTransport.SecureOutbound(context.TODO(), init, respTransport.LocalID)
 	}()
 
-	initConn, initErr := initTransport.SecureInbound(context.TODO(), init)
+	respConn, respErr := respTransport.SecureInbound(context.TODO(), resp)
 	<-done
 
 	if initErr != nil {
