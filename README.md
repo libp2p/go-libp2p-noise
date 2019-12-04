@@ -11,6 +11,14 @@
 
 Package `go-libp2p-noise` is a libp2p [stream security transport](https://github.com/libp2p/go-stream-security). Connections wrapped by `noise` use secure sessions provided by this package to encrypt all traffic. A noise protocol handshake is used to setup the communication channel. See the [noise-libp2p spec](https://github.com/libp2p/specs/blob/master/noise/README.md) for more info.
 
+## Status
+
+This implementation is being updated to track some recent changes to the [spec](https://github.com/libp2p/specs/blob/master/noise/README.md):
+
+- [ ] [use of channel binding token to prevent replay attacks](https://github.com/libp2p/specs/pull/234)
+
+We recommend waiting until those changes are in place before adopting go-libp2p-noise for production use.
+
 ## Install
 
 `go-libp2p-noise` is a standard Go module which can be installed with:
