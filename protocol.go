@@ -173,11 +173,15 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 		return fmt.Errorf("runHandshake proto marshal payload err=%s", err)
 	}
 
-	// if we have the peer's noise static key (and we're the initiator,) and we support noise pipes,
-	// we can try IK first. if we support noise pipes and we're not the initiator, try IK first
-	// otherwise, default to XX
-	if (!s.initiator && s.noiseStaticKeyCache[s.remotePeer] != [32]byte{}) && s.noisePipesSupport {
-		// known static key for peer, try IK
+	// If we support Noise pipes, we try IK first, falling back to XX if IK fails.
+	// The exception is when we're the initiator and don't know the other party's
+	// static Noise key. Then IK will always fail, so we go straight to XX.
+	tryIK := s.noisePipesSupport
+	if s.initiator && s.noiseStaticKeyCache[s.remotePeer] == [32]byte{} {
+		tryIK = false
+	}
+	if tryIK {
+		// we're either a responder or an initiator with a known static key for the remote peer, try IK
 		buf, err := s.runHandshake_ik(ctx, payloadEnc)
 		if err != nil {
 			log.Error("runHandshake ik err=%s", err)
