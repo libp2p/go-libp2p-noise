@@ -20,6 +20,11 @@ import (
 
 const payload_string = "noise-libp2p-static-key:"
 
+// Each encrypted transport message must be <= 65,535 bytes, including 16
+// bytes of authentication data. To write larger plaintexts, we split them
+// into fragments of maxPlaintextLength before encrypting.
+const maxPlaintextLength = 65519
+
 var log = logging.Logger("noise")
 
 type secureSession struct {
@@ -234,33 +239,50 @@ func (s *secureSession) Read(buf []byte) (int, error) {
 		return l, nil
 	}
 
-	// read length of encrypted message
-	l, err := s.readLength()
-	if err != nil {
-		return 0, err
+	readChunk := func(buf []byte) (int, error) {
+		// read length of encrypted message
+		l, err := s.readLength()
+		if err != nil {
+			return 0, err
+		}
+
+		// read and decrypt ciphertext
+		ciphertext := make([]byte, l)
+		_, err = s.insecure.Read(ciphertext)
+		if err != nil {
+			log.Error("read ciphertext err", err)
+			return 0, err
+		}
+
+		plaintext, err := s.Decrypt(ciphertext)
+		if err != nil {
+			log.Error("decrypt err", err)
+			return 0, err
+		}
+
+		// append plaintext to message buffer, copy over what can fit in the buf
+		// then advance message buffer to remove what was copied
+		s.msgBuffer = append(s.msgBuffer, plaintext...)
+		c := copy(buf, s.msgBuffer)
+		s.msgBuffer = s.msgBuffer[c:]
+		return c, nil
 	}
 
-	// read and decrypt ciphertext
-	ciphertext := make([]byte, l)
-	_, err = s.insecure.Read(ciphertext)
-	if err != nil {
-		log.Error("read ciphertext err", err)
-		return 0, err
+	total := 0
+	for i := 0; i < len(buf); i += maxPlaintextLength {
+		end := i + maxPlaintextLength
+		if end > len(buf) {
+			end = len(buf)
+		}
+
+		c, err := readChunk(buf[i:end])
+		total += c
+		if err != nil {
+			return total, err
+		}
 	}
 
-	plaintext, err := s.Decrypt(ciphertext)
-	if err != nil {
-		log.Error("decrypt err", err)
-		return 0, err
-	}
-
-	// append plaintext to message buffer, copy over what can fit in the buf
-	// then advance message buffer to remove what was copied
-	s.msgBuffer = append(s.msgBuffer, plaintext...)
-	c := copy(buf, s.msgBuffer)
-	s.msgBuffer = s.msgBuffer[c:]
-
-	return c, nil
+	return total, nil
 }
 
 func (s *secureSession) RemoteAddr() net.Addr {
@@ -291,20 +313,37 @@ func (s *secureSession) Write(in []byte) (int, error) {
 	s.rwLock.Lock()
 	defer s.rwLock.Unlock()
 
-	ciphertext, err := s.Encrypt(in)
-	if err != nil {
-		log.Error("encrypt error", err)
-		return 0, err
+	writeChunk := func(in []byte) (int, error) {
+		ciphertext, err := s.Encrypt(in)
+		if err != nil {
+			log.Error("encrypt error", err)
+			return 0, err
+		}
+
+		err = s.writeLength(len(ciphertext))
+		if err != nil {
+			log.Error("write length err", err)
+			return 0, err
+		}
+
+		_, err = s.insecure.Write(ciphertext)
+		return len(in), err
 	}
 
-	err = s.writeLength(len(ciphertext))
-	if err != nil {
-		log.Error("write length err", err)
-		return 0, err
-	}
+	written := 0
+	for i := 0; i < len(in); i += maxPlaintextLength {
+		end := i + maxPlaintextLength
+		if end > len(in) {
+			end = len(in)
+		}
 
-	_, err = s.insecure.Write(ciphertext)
-	return len(in), err
+		l, err := writeChunk(in[i:end])
+		written += l
+		if err != nil {
+			return written, err
+		}
+	}
+	return written, nil
 }
 
 func (s *secureSession) Close() error {
