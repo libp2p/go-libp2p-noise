@@ -3,6 +3,7 @@ package noise
 import (
 	"bytes"
 	"context"
+	"math/rand"
 	"net"
 	"testing"
 
@@ -145,6 +146,44 @@ func TestKeys(t *testing.T) {
 
 	if !pk.Equals(initConn.RemotePublicKey()) {
 		t.Errorf("Public key mismatch. expected %x got %x", pk, initConn.RemotePublicKey())
+	}
+}
+
+func makeLargePlaintext(size int) []byte {
+	buf := make([]byte, size)
+	rand.Read(buf)
+	return buf
+}
+
+func TestLargePayloads(t *testing.T) {
+	initTransport := newTestTransport(t, crypto.Ed25519, 2048)
+	respTransport := newTestTransport(t, crypto.Ed25519, 2048)
+
+	initConn, respConn := connect(t, initTransport, respTransport)
+	defer initConn.Close()
+	defer respConn.Close()
+
+	// enough to require a couple Noise messages, with a size that
+	// isn't a neat multiple of Noise message size, just in case
+	size := 100000
+
+	before := makeLargePlaintext(size)
+	_, err := initConn.Write(before)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	after := make([]byte, len(before))
+	afterLen, err := respConn.Read(after)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(before) != afterLen {
+		t.Errorf("expected to read same amount of data as written. written=%d read=%d", len(before), afterLen)
+	}
+	if !bytes.Equal(before, after) {
+		t.Error("Message mismatch.")
 	}
 }
 
