@@ -80,15 +80,15 @@ func newConnPair(t *testing.T) (net.Conn, net.Conn) {
 func connect(t *testing.T, initTransport, respTransport *Transport) (*secureSession, *secureSession) {
 	init, resp := newConnPair(t)
 
-	var respConn sec.SecureConn
-	var respErr error
+	var initConn sec.SecureConn
+	var initErr error
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		respConn, respErr = respTransport.SecureOutbound(context.TODO(), resp, initTransport.LocalID)
+		initConn, initErr = initTransport.SecureOutbound(context.TODO(), init, respTransport.LocalID)
 	}()
 
-	initConn, initErr := initTransport.SecureInbound(context.TODO(), init)
+	respConn, respErr := respTransport.SecureInbound(context.TODO(), resp)
 	<-done
 
 	if initErr != nil {
@@ -176,25 +176,17 @@ func TestHandshakeXX(t *testing.T) {
 
 // Test IK handshake
 func TestHandshakeIK(t *testing.T) {
-	initTransport := newTestTransport(t, crypto.Ed25519, 2048)
-	respTransport := newTestTransport(t, crypto.Ed25519, 2048)
-
-	// do initial XX handshake
-	initConn, respConn := connect(t, initTransport, respTransport)
-	initConn.Close()
-	respConn.Close()
-
-	// turn on pipes, this will turn on IK
-	initTransport.NoisePipesSupport = true
-	respTransport.NoisePipesSupport = true
+	initTransport := newTestTransportPipes(t, crypto.Ed25519, 2048)
+	respTransport := newTestTransportPipes(t, crypto.Ed25519, 2048)
 
 	// add responder's static key to initiator's key cache
+	respTransport.NoiseKeypair = GenerateKeypair()
 	keycache := make(map[peer.ID]([32]byte))
 	keycache[respTransport.LocalID] = respTransport.NoiseKeypair.public_key
 	initTransport.NoiseStaticKeyCache = keycache
 
 	// do IK handshake
-	initConn, respConn = connect(t, initTransport, respTransport)
+	initConn, respConn := connect(t, initTransport, respTransport)
 	defer initConn.Close()
 	defer respConn.Close()
 
@@ -212,6 +204,11 @@ func TestHandshakeIK(t *testing.T) {
 
 	if !bytes.Equal(before, after) {
 		t.Errorf("Message mismatch. %v != %v", before, after)
+	}
+
+	// make sure IK was actually used
+	if !(initConn.ik_complete && respConn.ik_complete) {
+		t.Error("Expected IK handshake to be used")
 	}
 }
 
@@ -240,5 +237,10 @@ func TestHandshakeXXfallback(t *testing.T) {
 
 	if !bytes.Equal(before, after) {
 		t.Errorf("Message mismatch. %v != %v", before, after)
+	}
+
+	// make sure XX was actually used
+	if !(initConn.xx_complete && respConn.xx_complete) {
+		t.Error("Expected XXfallback handshake to be used")
 	}
 }

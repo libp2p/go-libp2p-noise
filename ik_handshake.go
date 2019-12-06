@@ -60,13 +60,13 @@ func (s *secureSession) ik_recvHandshakeMessage(initial_stage bool) (buf []byte,
 	log.Debugf("ik_recvHandshakeMessage initiator=%v msgbuf=%v", s.initiator, msgbuf)
 
 	if err != nil {
-		log.Error("ik_recvHandshakeMessage initiator=%v decode err=%s", s.initiator, err)
+		log.Errorf("ik_recvHandshakeMessage initiator=%v decode err=%s", s.initiator, err)
 		return buf, nil, false, fmt.Errorf("ik_recvHandshakeMessage decode msg fail: %s", err)
 	}
 
 	s.ik_ns, plaintext, valid = ik.RecvMessage(s.ik_ns, msgbuf)
 	if !valid {
-		log.Error("ik_recvHandshakeMessage initiator=%v err=%s", s.initiator, "validation fail")
+		log.Errorf("ik_recvHandshakeMessage initiator=%v err=%s", s.initiator, "validation fail")
 		return buf, nil, false, fmt.Errorf("ik_recvHandshakeMessage validation fail")
 	}
 
