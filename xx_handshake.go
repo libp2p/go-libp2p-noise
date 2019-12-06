@@ -178,7 +178,7 @@ func (s *secureSession) runHandshake_xx(ctx context.Context, fallback bool, payl
 		}
 
 		if s.noisePipesSupport {
-			s.noiseStaticKeyCache[s.remotePeer] = s.xx_ns.RemoteKey()
+			s.noiseStaticKeyCache.Store(s.remotePeer, s.xx_ns.RemoteKey())
 		}
 
 	} else {
@@ -268,7 +268,7 @@ func (s *secureSession) runHandshake_xx(ctx context.Context, fallback bool, payl
 		}
 
 		if s.noisePipesSupport {
-			s.noiseStaticKeyCache[s.remotePeer] = s.remote.noiseKey
+			s.noiseStaticKeyCache.Store(s.remotePeer, s.remote.noiseKey)
 		}
 	}
 

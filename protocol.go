@@ -47,7 +47,7 @@ type secureSession struct {
 	ik_complete bool
 
 	noisePipesSupport   bool
-	noiseStaticKeyCache map[peer.ID]([32]byte)
+	noiseStaticKeyCache *KeyCache
 
 	noiseKeypair *Keypair
 
@@ -67,11 +67,11 @@ type peerInfo struct {
 // With noise pipes off, we always do XX
 // With noise pipes on, we first try IK, if that fails, move to XXfallback
 func newSecureSession(ctx context.Context, local peer.ID, privKey crypto.PrivKey, kp *Keypair,
-	insecure net.Conn, remote peer.ID, noiseStaticKeyCache map[peer.ID]([32]byte),
+	insecure net.Conn, remote peer.ID, noiseStaticKeyCache *KeyCache,
 	noisePipesSupport bool, initiator bool) (*secureSession, error) {
 
 	if noiseStaticKeyCache == nil {
-		noiseStaticKeyCache = make(map[peer.ID]([32]byte))
+		noiseStaticKeyCache = NewKeyCache()
 	}
 
 	if kp == nil {
@@ -102,7 +102,7 @@ func newSecureSession(ctx context.Context, local peer.ID, privKey crypto.PrivKey
 	return s, err
 }
 
-func (s *secureSession) NoiseStaticKeyCache() map[peer.ID]([32]byte) {
+func (s *secureSession) NoiseStaticKeyCache() *KeyCache {
 	return s.noiseStaticKeyCache
 }
 
@@ -182,7 +182,7 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 	// The exception is when we're the initiator and don't know the other party's
 	// static Noise key. Then IK will always fail, so we go straight to XX.
 	tryIK := s.noisePipesSupport
-	if s.initiator && s.noiseStaticKeyCache[s.remotePeer] == [32]byte{} {
+	if s.initiator && s.noiseStaticKeyCache.Load(s.remotePeer) == [32]byte{} {
 		tryIK = false
 	}
 	if tryIK {
