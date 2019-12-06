@@ -2,8 +2,8 @@ package noise
 
 import (
 	"errors"
-	ik "github.com/ChainSafe/go-libp2p-noise/ik"
-	xx "github.com/ChainSafe/go-libp2p-noise/xx"
+	ik "github.com/libp2p/go-libp2p-noise/ik"
+	xx "github.com/libp2p/go-libp2p-noise/xx"
 )
 
 func (s *secureSession) Encrypt(plaintext []byte) (ciphertext []byte, err error) {

@@ -2,9 +2,9 @@ package ik
 
 import (
 	"crypto/rand"
-	pb "github.com/ChainSafe/go-libp2p-noise/pb"
 	proto "github.com/gogo/protobuf/proto"
 	"github.com/libp2p/go-libp2p-core/crypto"
+	pb "github.com/libp2p/go-libp2p-noise/pb"
 	"testing"
 )
 

@@ -13,9 +13,9 @@ import (
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
 
-	ik "github.com/ChainSafe/go-libp2p-noise/ik"
-	pb "github.com/ChainSafe/go-libp2p-noise/pb"
-	xx "github.com/ChainSafe/go-libp2p-noise/xx"
+	ik "github.com/libp2p/go-libp2p-noise/ik"
+	pb "github.com/libp2p/go-libp2p-noise/pb"
+	xx "github.com/libp2p/go-libp2p-noise/xx"
 )
 
 const payload_string = "noise-libp2p-static-key:"

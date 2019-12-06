@@ -7,8 +7,8 @@ import (
 	proto "github.com/gogo/protobuf/proto"
 	"github.com/libp2p/go-libp2p-core/peer"
 
-	pb "github.com/ChainSafe/go-libp2p-noise/pb"
-	xx "github.com/ChainSafe/go-libp2p-noise/xx"
+	pb "github.com/libp2p/go-libp2p-noise/pb"
+	xx "github.com/libp2p/go-libp2p-noise/xx"
 )
 
 func (s *secureSession) xx_sendHandshakeMessage(payload []byte, initial_stage bool) error {
