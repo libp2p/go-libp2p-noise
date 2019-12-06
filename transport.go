@@ -23,6 +23,14 @@ type Keypair struct {
 	private_key [32]byte
 }
 
+func (kp Keypair) PublicKey() [32]byte {
+	return kp.public_key
+}
+
+func (kp Keypair) PrivateKey() [32]byte {
+	return kp.private_key
+}
+
 // GenerateKeypair creates a new ed25519 keypair
 func GenerateKeypair() *Keypair {
 	var public_key [32]byte

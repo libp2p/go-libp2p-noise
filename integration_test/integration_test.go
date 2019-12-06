@@ -1,4 +1,4 @@
-package noise
+package integration_test
 
 import (
 	"bufio"
@@ -10,6 +10,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/host"
 	net "github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
+	noise "github.com/libp2p/go-libp2p-noise"
 	ma "github.com/multiformats/go-multiaddr"
 	"io"
 	mrand "math/rand"
@@ -33,7 +34,7 @@ func generateKey(seed int64) (crypto.PrivKey, error) {
 	return priv, nil
 }
 
-func makeNode(t *testing.T, seed int64, port int, kp *Keypair) (host.Host, error) {
+func makeNode(t *testing.T, seed int64, port int, kp *noise.Keypair) (host.Host, error) {
 	priv, err := generateKey(seed)
 	if err != nil {
 		t.Fatal(err)
@@ -44,7 +45,7 @@ func makeNode(t *testing.T, seed int64, port int, kp *Keypair) (host.Host, error
 		t.Fatal(err)
 	}
 
-	tpt := NewTransport(pid, priv, false, kp)
+	tpt := noise.NewTransport(pid, priv, false, kp)
 
 	ip := "0.0.0.0"
 	addr, err := ma.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%d", ip, port))
@@ -54,7 +55,7 @@ func makeNode(t *testing.T, seed int64, port int, kp *Keypair) (host.Host, error
 
 	options := []libp2p.Option{
 		libp2p.Identity(priv),
-		libp2p.Security(ID, tpt),
+		libp2p.Security(noise.ID, tpt),
 		libp2p.ListenAddrs(addr),
 	}
 
@@ -63,7 +64,7 @@ func makeNode(t *testing.T, seed int64, port int, kp *Keypair) (host.Host, error
 	return libp2p.New(ctx, options...)
 }
 
-func makeNodePipes(t *testing.T, seed int64, port int, rpid peer.ID, rpubkey [32]byte, kp *Keypair) (host.Host, error) {
+func makeNodePipes(t *testing.T, seed int64, port int, rpid peer.ID, rpubkey [32]byte, kp *noise.Keypair) (host.Host, error) {
 	priv, err := generateKey(seed)
 	if err != nil {
 		t.Fatal(err)
@@ -74,7 +75,7 @@ func makeNodePipes(t *testing.T, seed int64, port int, rpid peer.ID, rpubkey [32
 		t.Fatal(err)
 	}
 
-	tpt := NewTransport(pid, priv, true, kp)
+	tpt := noise.NewTransport(pid, priv, true, kp)
 	tpt.NoiseStaticKeyCache = make(map[peer.ID]([32]byte))
 	tpt.NoiseStaticKeyCache[rpid] = rpubkey
 
@@ -86,7 +87,7 @@ func makeNodePipes(t *testing.T, seed int64, port int, rpid peer.ID, rpubkey [32
 
 	options := []libp2p.Option{
 		libp2p.Identity(priv),
-		libp2p.Security(ID, tpt),
+		libp2p.Security(noise.ID, tpt),
 		libp2p.ListenAddrs(addr),
 	}
 
@@ -113,8 +114,8 @@ func TestLibp2pIntegration_NoPipes(t *testing.T) {
 
 	defer hb.Close()
 
-	ha.SetStreamHandler(ID, handleStream)
-	hb.SetStreamHandler(ID, handleStream)
+	ha.SetStreamHandler(noise.ID, handleStream)
+	hb.SetStreamHandler(noise.ID, handleStream)
 
 	addr, err := ma.NewMultiaddr(fmt.Sprintf("%s/p2p/%s", hb.Addrs()[0].String(), hb.ID()))
 	if err != nil {
@@ -133,7 +134,7 @@ func TestLibp2pIntegration_NoPipes(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	stream, err := ha.NewStream(ctx, hb.ID(), ID)
+	stream, err := ha.NewStream(ctx, hb.ID(), noise.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,7 +152,7 @@ func TestLibp2pIntegration_NoPipes(t *testing.T) {
 func TestLibp2pIntegration_WithPipes(t *testing.T) {
 	ctx := context.Background()
 
-	kpa := GenerateKeypair()
+	kpa := noise.GenerateKeypair()
 
 	ha, err := makeNodePipes(t, 1, 33333, "", [32]byte{}, kpa)
 	if err != nil {
@@ -160,15 +161,15 @@ func TestLibp2pIntegration_WithPipes(t *testing.T) {
 
 	defer ha.Close()
 
-	hb, err := makeNodePipes(t, 2, 34343, ha.ID(), kpa.public_key, nil)
+	hb, err := makeNodePipes(t, 2, 34343, ha.ID(), kpa.PublicKey(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	defer hb.Close()
 
-	ha.SetStreamHandler(ID, handleStream)
-	hb.SetStreamHandler(ID, handleStream)
+	ha.SetStreamHandler(noise.ID, handleStream)
+	hb.SetStreamHandler(noise.ID, handleStream)
 
 	addr, err := ma.NewMultiaddr(fmt.Sprintf("%s/p2p/%s", ha.Addrs()[0].String(), ha.ID()))
 	if err != nil {
@@ -187,7 +188,7 @@ func TestLibp2pIntegration_WithPipes(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	stream, err := hb.NewStream(ctx, ha.ID(), ID)
+	stream, err := hb.NewStream(ctx, ha.ID(), noise.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -205,7 +206,7 @@ func TestLibp2pIntegration_WithPipes(t *testing.T) {
 func TestLibp2pIntegration_XXFallback(t *testing.T) {
 	ctx := context.Background()
 
-	kpa := GenerateKeypair()
+	kpa := noise.GenerateKeypair()
 
 	ha, err := makeNode(t, 1, 33333, kpa)
 	if err != nil {
@@ -214,15 +215,15 @@ func TestLibp2pIntegration_XXFallback(t *testing.T) {
 
 	defer ha.Close()
 
-	hb, err := makeNodePipes(t, 2, 34343, ha.ID(), kpa.public_key, nil)
+	hb, err := makeNodePipes(t, 2, 34343, ha.ID(), kpa.PublicKey(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	defer hb.Close()
 
-	ha.SetStreamHandler(ID, handleStream)
-	hb.SetStreamHandler(ID, handleStream)
+	ha.SetStreamHandler(noise.ID, handleStream)
+	hb.SetStreamHandler(noise.ID, handleStream)
 
 	addr, err := ma.NewMultiaddr(fmt.Sprintf("%s/p2p/%s", hb.Addrs()[0].String(), hb.ID()))
 	if err != nil {
@@ -241,7 +242,7 @@ func TestLibp2pIntegration_XXFallback(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	stream, err := hb.NewStream(ctx, ha.ID(), ID)
+	stream, err := hb.NewStream(ctx, ha.ID(), noise.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -259,7 +260,7 @@ func TestLibp2pIntegration_XXFallback(t *testing.T) {
 func handleStream(stream net.Stream) {
 	defer func() {
 		if err := stream.Close(); err != nil {
-			log.Error("error closing stream", "err", err)
+			fmt.Println("error closing stream", "err", err)
 		}
 	}()
 
