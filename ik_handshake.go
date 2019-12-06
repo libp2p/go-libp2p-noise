@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	ik "github.com/ChainSafe/go-libp2p-noise/ik"
-	pb "github.com/ChainSafe/go-libp2p-noise/pb"
 	proto "github.com/gogo/protobuf/proto"
+	ik "github.com/libp2p/go-libp2p-noise/ik"
+	pb "github.com/libp2p/go-libp2p-noise/pb"
 )
 
 func (s *secureSession) ik_sendHandshakeMessage(payload []byte, initial_stage bool) error {
