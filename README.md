@@ -9,9 +9,35 @@
 
 > go-libp2p's noise encrypted transport
 
-Package `go-libp2p-noise` is a libp2p [stream security transport](https://github.com/libp2p/go-stream-security). Connections wrapped by `noise` use secure sessions provided by this package to encrypt all traffic. A noise protocol handshake is used to setup the communication channel. See the [noise-libp2p spec](https://github.com/libp2p/specs/blob/master/noise/README.md) for more info.
+`go-libp2p-noise` is a component of the [libp2p project](https://libp2p.io), a
+modular networking stack for developing peer-to-peer applications. It provides a
+secure transport channel for [`go-libp2p`][go-libp2p] based on the 
+[Noise Protocol Framework](https://noiseprotocol.org). Following an initial
+plaintext handshake, all data exchanged between peers using `go-libp2p-noise` is
+encrypted and protected from eavesdropping.
+
+libp2p supports multiple [transport protocols][docs-transport], many of which
+lack native channel security. `go-libp2p-noise` is designed to work with
+go-libp2p's ["transport upgrader"][transport-upgrader], which applies security
+modules (like `go-libp2p-noise`) to an insecure channel. `go-libp2p-noise`
+implements the [`SecureTransport` interface][godoc-securetransport], which
+allows the upgrader to secure any underlying connection.
+
+More detail on the handshake protocol and wire format used is available in the
+[noise-libp2p specification][noise-libp2p-spec]. Details about security protocol
+negotiation in libp2p can be found in the [connection establishment spec][conn-spec].
+
+## Status
+
+This implementation is being updated to track some recent changes to the [spec][noise-libp2p-spec]:
+
+- [ ] [use of channel binding token to prevent replay attacks](https://github.com/libp2p/specs/pull/234)
+
+We recommend waiting until those changes are in place before adopting go-libp2p-noise for production use.
 
 ## Install
+
+As `go-libp2p-noise` is still in development, it is not included as a default dependency of `go-libp2p`.
 
 `go-libp2p-noise` is a standard Go module which can be installed with:
 
@@ -26,20 +52,36 @@ or by editing your `go.mod` file as [described by the gomod documentation](https
 
 ## Usage
 
-For more information about how `go-libp2p-noise` is used in the libp2p context, you can see the [go-libp2p-conn](https://github.com/libp2p/go-libp2p-conn) module.
+`go-libp2p-noise` is not currently enabled by default when constructing a new libp2p
+[Host][godoc-host], so you will need to explicitly enable it in order to use it.
+
+The API for constructing a new Noise transport is currently in flux. This README will
+be updated once it stabilizes. 
 
 ## Contribute
 
 Feel free to join in. All welcome. Open an [issue](https://github.com/libp2p/go-libp2p-noise/issues)!
 
-This repository falls under the IPFS [Code of Conduct](https://github.com/libp2p/community/blob/master/code-of-conduct.md).
+This repository falls under the libp2p [Code of Conduct](https://github.com/libp2p/community/blob/master/code-of-conduct.md).
 
-### Want to hack on IPFS?
+### Want to hack on libp2p?
 
-[![](https://cdn.rawgit.com/jbenet/contribute-ipfs-gif/master/img/contribute.gif)](https://github.com/ipfs/community/blob/master/contributing.md)
+[![](https://cdn.rawgit.com/libp2p/community/master/img/contribute.gif)](https://github.com/libp2p/community/blob/master/CONTRIBUTE.md)
 
 ## License
 
 MIT
 
 ---
+
+[go-libp2p]: https://github.com/libp2p/go-libp2p
+[noise-libp2p-spec]: https://github.com/libp2p/specs/blob/master/noise/README.md
+[conn-spec]: https://github.com/libp2p/specs/blob/master/connections/README.md
+[docs-transport]: https://docs.libp2p.io/concepts/transport
+[transport-upgrader]: https://github.com/libp2p/go-libp2p-transport-upgrader
+[godoc-host]: https://godoc.org/github.com/libp2p/go-libp2p-core/host#Host
+[godoc-option]: https://godoc.org/github.com/libp2p/go-libp2p#Option
+[godoc-go-libp2p-pkg-vars]: https://godoc.org/github.com/libp2p/go-libp2p#pkg-variables 
+[godoc-security-option]: https://godoc.org/github.com/libp2p/go-libp2p#Security
+[godoc-securetransport]: https://godoc.org/github.com/libp2p/go-libp2p-core/sec#SecureTransport
+
