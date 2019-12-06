@@ -55,30 +55,8 @@ or by editing your `go.mod` file as [described by the gomod documentation](https
 `go-libp2p-noise` is not currently enabled by default when constructing a new libp2p
 [Host][godoc-host], so you will need to explicitly enable it in order to use it.
 
-To add `go-libp2p-noise` to the default set of security protocols, you can extend the
-`DefaultSecurity` [package variable in go-libp2p][godoc-go-libp2p-pkg-vars] with
-a new [`Security` option][godoc-security-option] that enables `go-libp2p-noise`:
-
-```go
-package example
-
-import (
-  "context"
-  libp2p "github.com/libp2p/go-libp2p"
-  noise "github.com/libp2p/go-libp2p-noise"
-)
-
-ctx := context.Background() // you may want a more specialized context in the real world
-security := libp2p.ChainOptions(
-  libp2p.DefaultSecurity,
-  libp2p.Security(noise.ID, noise.NewTransport))
-
-host := libp2p.New(ctx, security)
-```
-
-If you _only_ want to use `go-libp2p-noise`, you can simply pass in the `Security` option without chaining it
-to the `DefaultSecurity` variable. However, this will limit the peers you are able to communicate with to just
-those that support the Noise libp2p security protocol.
+The API for constructing a new Noise transport is currently in flux. This README will
+be updated once it stabilizes. 
 
 ## Contribute
 
