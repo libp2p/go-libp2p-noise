@@ -220,8 +220,8 @@ func TestHandshakeIK(t *testing.T) {
 
 	// add responder's static key to initiator's key cache
 	respTransport.NoiseKeypair = GenerateKeypair()
-	keycache := make(map[peer.ID]([32]byte))
-	keycache[respTransport.LocalID] = respTransport.NoiseKeypair.public_key
+	keycache := NewKeyCache()
+	keycache.Store(respTransport.LocalID, respTransport.NoiseKeypair.public_key)
 	initTransport.NoiseStaticKeyCache = keycache
 
 	// do IK handshake

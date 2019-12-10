@@ -38,7 +38,7 @@ type Transport struct {
 	LocalID             peer.ID
 	PrivateKey          crypto.PrivKey
 	NoisePipesSupport   bool
-	NoiseStaticKeyCache map[peer.ID]([32]byte)
+	NoiseStaticKeyCache *KeyCache
 	NoiseKeypair        *Keypair
 }
 
@@ -49,11 +49,18 @@ func NewTransport(localID peer.ID, privkey crypto.PrivKey, noisePipesSupport boo
 		kp = GenerateKeypair()
 	}
 
+	// the static key cache is only useful if Noise Pipes is enabled
+	var keyCache *KeyCache
+	if noisePipesSupport {
+		keyCache = NewKeyCache()
+	}
+
 	return &Transport{
-		LocalID:           localID,
-		PrivateKey:        privkey,
-		NoisePipesSupport: noisePipesSupport,
-		NoiseKeypair:      kp,
+		LocalID:             localID,
+		PrivateKey:          privkey,
+		NoisePipesSupport:   noisePipesSupport,
+		NoiseKeypair:        kp,
+		NoiseStaticKeyCache: keyCache,
 	}
 }
 
@@ -64,7 +71,6 @@ func (t *Transport) SecureInbound(ctx context.Context, insecure net.Conn) (sec.S
 		return s, err
 	}
 
-	t.NoiseStaticKeyCache = s.NoiseStaticKeyCache()
 	t.NoiseKeypair = s.noiseKeypair
 	return s, nil
 }
@@ -76,7 +82,6 @@ func (t *Transport) SecureOutbound(ctx context.Context, insecure net.Conn, p pee
 		return s, err
 	}
 
-	t.NoiseStaticKeyCache = s.NoiseStaticKeyCache()
 	t.NoiseKeypair = s.noiseKeypair
 	return s, nil
 }
