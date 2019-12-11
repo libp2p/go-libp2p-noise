@@ -11,5 +11,5 @@ require (
 	github.com/libp2p/go-libp2p-core v0.2.5
 	github.com/libp2p/go-msgio v0.0.4
 	github.com/multiformats/go-multiaddr v0.2.0
-	golang.org/x/crypto v0.0.0-20190618222545-ea8f1a30c443
+	golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550
 )
