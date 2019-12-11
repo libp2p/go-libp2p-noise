@@ -13,7 +13,7 @@ import (
 )
 
 // ID is the protocol ID for noise
-const ID = "/noise/0.0.1"
+const ID = "/noise"
 
 var _ sec.SecureTransport = &Transport{}
 
