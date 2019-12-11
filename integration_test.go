@@ -5,7 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
-	libp2p "github.com/libp2p/go-libp2p"
+	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/host"
 	net "github.com/libp2p/go-libp2p-core/network"
@@ -39,13 +39,10 @@ func makeNode(t *testing.T, seed int64, port int, kp *Keypair) (host.Host, error
 		t.Fatal(err)
 	}
 
-	pid, err := peer.IDFromPrivateKey(priv)
+	tpt, err := NewTransport(priv, NoiseKeyPair(kp))
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	tpt := NewTransport(pid, priv, false, kp)
-
 	ip := "0.0.0.0"
 	addr, err := ma.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%d", ip, port))
 	if err != nil {
@@ -69,12 +66,11 @@ func makeNodePipes(t *testing.T, seed int64, port int, rpid peer.ID, rpubkey [32
 		t.Fatal(err)
 	}
 
-	pid, err := peer.IDFromPrivateKey(priv)
+	tpt, err := NewTransport(priv, UseNoisePipes, NoiseKeyPair(kp))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	tpt := NewTransport(pid, priv, true, kp)
 	tpt.NoiseStaticKeyCache = NewKeyCache()
 	tpt.NoiseStaticKeyCache.Store(rpid, rpubkey)
 
@@ -254,6 +250,20 @@ func TestLibp2pIntegration_XXFallback(t *testing.T) {
 	fmt.Println("fin")
 
 	time.Sleep(time.Second)
+}
+
+func TestNewTransportGenerator(t *testing.T) {
+	kp := GenerateKeypair()
+
+	ctx := context.Background()
+	h, err := libp2p.New(ctx,
+		libp2p.Security(ID,
+			NewTransportConstructor(NoiseKeyPair(kp), UseNoisePipes)))
+
+	if err != nil {
+		t.Fatalf("unable to create libp2p host with NewTransportConstructor: %v", err)
+	}
+	_ = h.Close()
 }
 
 func handleStream(stream net.Stream) {
