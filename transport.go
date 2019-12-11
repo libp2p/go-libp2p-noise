@@ -44,19 +44,20 @@ type Transport struct {
 
 type transportConstructor func(crypto.PrivKey) (*Transport, error)
 
-// NewTransportConstructor returns a function that will construct a new Noise transport
+// Maker returns a function that will construct a new Noise transport
 // using the given Options. The returned function may be provided as a libp2p.Security
-// option when configuring a libp2p Host using libp2p.New:
+// option when configuring a libp2p Host using libp2p.New, and is compatible with the
+// "reflection magic" that libp2p.New uses to inject the private identity key:
 //
 //    host := libp2p.New(
-//      libp2p.Security(noise.ID, noise.NewTransportConstructor()))
+//      libp2p.Security(noise.ID, noise.Maker()))
 //
 // The transport can be configured by passing in Options.
 //
 // To enable the Noise Pipes pattern (which can be more efficient when reconnecting
 // to a known peer), pass in the UseNoisePipes Option:
 //
-//    NewTransportConstructor(UseNoisePipes)
+//    Maker(UseNoisePipes)
 //
 // To use a specific Noise keypair, pass in the NoiseKeyPair(kp) option, where
 // kp is a noise.Keypair struct. This is most useful when using Noise Pipes, whose
@@ -64,21 +65,21 @@ type transportConstructor func(crypto.PrivKey) (*Transport, error)
 // the Noise keypair across process restarts makes it more likely that other peers
 // will be able to use the more efficient IK handshake pattern.
 //
-//    NewTransportConstructor(UseNoisePipes, NoiseKeypair(keypairLoadedFromDisk))
-func NewTransportConstructor(options ...Option) transportConstructor {
+//    Maker(UseNoisePipes, NoiseKeypair(keypairLoadedFromDisk))
+func Maker(options ...Option) transportConstructor {
 	return func(privKey crypto.PrivKey) (*Transport, error) {
-		return NewTransport(privKey, options...)
+		return New(privKey, options...)
 	}
 }
 
-// NewTransport creates a new Noise transport using the given private key as its
+// New creates a new Noise transport using the given private key as its
 // libp2p identity key. This function may be used when you want a transport
 // instance and know the libp2p Host's identity key before the Host is initialized.
 // When configuring a go-libp2p Host using libp2p.New, it's simpler to use
-// NewTransportConstructor instead, which will receive the identity key when the Host
+// Maker instead, which will receive the identity key when the Host
 // is initialized.
 //
-// NewTransport supports all the same Options as NewTransportConstructor.
+// New supports all the same Options as noise.Maker.
 //
 // To configure a go-libp2p Host to use the newly created transport, pass it into
 // libp2p.New wrapped in a libp2p.Security Option. You will also need to
@@ -86,11 +87,11 @@ func NewTransportConstructor(options ...Option) transportConstructor {
 // identity key:
 //
 //    privkey := loadPrivateKeyFromSomewhere()
-//    noiseTpt := noise.NewTransport(privkey)
+//    noiseTpt := noise.New(privkey)
 //    host := libp2p.New(
 //      libp2p.Identity(privkey),
 //      libp2p.Security(noise.ID, noiseTpt))
-func NewTransport(privkey crypto.PrivKey, options ...Option) (*Transport, error) {
+func New(privkey crypto.PrivKey, options ...Option) (*Transport, error) {
 	localID, err := peer.IDFromPrivateKey(privkey)
 	if err != nil {
 		return nil, err

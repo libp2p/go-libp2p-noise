@@ -39,7 +39,7 @@ func makeNode(t *testing.T, seed int64, port int, kp *Keypair) (host.Host, error
 		t.Fatal(err)
 	}
 
-	tpt, err := NewTransport(priv, NoiseKeyPair(kp))
+	tpt, err := New(priv, NoiseKeyPair(kp))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +66,7 @@ func makeNodePipes(t *testing.T, seed int64, port int, rpid peer.ID, rpubkey [32
 		t.Fatal(err)
 	}
 
-	tpt, err := NewTransport(priv, UseNoisePipes, NoiseKeyPair(kp))
+	tpt, err := New(priv, UseNoisePipes, NoiseKeyPair(kp))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -252,16 +252,16 @@ func TestLibp2pIntegration_XXFallback(t *testing.T) {
 	time.Sleep(time.Second)
 }
 
-func TestNewTransportGenerator(t *testing.T) {
+func TestConstrucingWithMaker(t *testing.T) {
 	kp := GenerateKeypair()
 
 	ctx := context.Background()
 	h, err := libp2p.New(ctx,
 		libp2p.Security(ID,
-			NewTransportConstructor(NoiseKeyPair(kp), UseNoisePipes)))
+			Maker(NoiseKeyPair(kp), UseNoisePipes)))
 
 	if err != nil {
-		t.Fatalf("unable to create libp2p host with NewTransportConstructor: %v", err)
+		t.Fatalf("unable to create libp2p host with Maker: %v", err)
 	}
 	_ = h.Close()
 }
