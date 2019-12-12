@@ -2,10 +2,7 @@ package noise
 
 import (
 	"context"
-	"crypto/rand"
 	"net"
-
-	"golang.org/x/crypto/curve25519"
 
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -16,24 +13,6 @@ import (
 const ID = "/noise"
 
 var _ sec.SecureTransport = &Transport{}
-
-// Keypair is a noise ed25519 public-private keypair
-type Keypair struct {
-	public_key  [32]byte
-	private_key [32]byte
-}
-
-// GenerateKeypair creates a new ed25519 keypair
-func GenerateKeypair() (*Keypair, error) {
-	var public_key [32]byte
-	var private_key [32]byte
-	_, err := rand.Read(private_key[:])
-	if err != nil {
-		return nil, err
-	}
-	curve25519.ScalarBaseMult(&public_key, &private_key)
-	return &Keypair{public_key, private_key}, nil
-}
 
 // Transport implements the interface sec.SecureTransport
 // https://godoc.org/github.com/libp2p/go-libp2p-core/sec#SecureConn
