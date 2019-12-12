@@ -22,26 +22,21 @@ func newTestTransport(t *testing.T, typ, bits int) *Transport {
 	if err != nil {
 		t.Fatal(err)
 	}
+	kp, err := GenerateKeypair()
+	if err != nil {
+		t.Fatal(err)
+	}
 	return &Transport{
-		localID:    id,
-		privateKey: priv,
+		localID:      id,
+		privateKey:   priv,
+		noiseKeypair: kp,
 	}
 }
 
 func newTestTransportPipes(t *testing.T, typ, bits int) *Transport {
-	priv, pub, err := crypto.GenerateKeyPair(typ, bits)
-	if err != nil {
-		t.Fatal(err)
-	}
-	id, err := peer.IDFromPublicKey(pub)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return &Transport{
-		localID:           id,
-		privateKey:        priv,
-		noisePipesSupport: true,
-	}
+	tpt := newTestTransport(t, typ, bits)
+	tpt.noisePipesSupport = true
+	return tpt
 }
 
 // Create a new pair of connected TCP sockets.
@@ -219,11 +214,6 @@ func TestHandshakeIK(t *testing.T) {
 	respTransport := newTestTransportPipes(t, crypto.Ed25519, 2048)
 
 	// add responder's static key to initiator's key cache
-	kp, err := GenerateKeypair()
-	if err != nil {
-		t.Fatal(err)
-	}
-	respTransport.noiseKeypair = kp
 	keycache := NewKeyCache()
 	keycache.Store(respTransport.localID, respTransport.noiseKeypair.publicKey)
 	initTransport.noiseStaticKeyCache = keycache
@@ -234,7 +224,7 @@ func TestHandshakeIK(t *testing.T) {
 	defer respConn.Close()
 
 	before := []byte("hello world")
-	_, err = initConn.Write(before)
+	_, err := initConn.Write(before)
 	if err != nil {
 		t.Fatal(err)
 	}

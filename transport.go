@@ -107,22 +107,10 @@ func New(privkey crypto.PrivKey, options ...Option) (*Transport, error) {
 
 // SecureInbound runs noise handshake as the responder
 func (t *Transport) SecureInbound(ctx context.Context, insecure net.Conn) (sec.SecureConn, error) {
-	s, err := newSecureSession(ctx, t.localID, t.privateKey, t.noiseKeypair, insecure, "", t.noiseStaticKeyCache, t.noisePipesSupport, false)
-	if err != nil {
-		return s, err
-	}
-
-	t.noiseKeypair = s.noiseKeypair
-	return s, nil
+	return newSecureSession(t, ctx, insecure, "", false)
 }
 
 // SecureOutbound runs noise handshake as the initiator
 func (t *Transport) SecureOutbound(ctx context.Context, insecure net.Conn, p peer.ID) (sec.SecureConn, error) {
-	s, err := newSecureSession(ctx, t.localID, t.privateKey, t.noiseKeypair, insecure, p, t.noiseStaticKeyCache, t.noisePipesSupport, true)
-	if err != nil {
-		return s, err
-	}
-
-	t.noiseKeypair = s.noiseKeypair
-	return s, nil
+	return newSecureSession(t, ctx, insecure, p, true)
 }
