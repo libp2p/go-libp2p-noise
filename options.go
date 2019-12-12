@@ -9,7 +9,7 @@ package noise
 // using XX in the first place, however there is a slight processing overhead
 // due to the initial decryption attempt of the IK message.
 func UseNoisePipes(cfg *config) {
-	cfg.NoisePipesSupport = true
+	cfg.noisePipesSupport = true
 }
 
 // NoiseKeyPair configures the Noise transport to use the given Noise static
@@ -24,13 +24,13 @@ func UseNoisePipes(cfg *config) {
 // take care to store the key securely!
 func NoiseKeyPair(kp *Keypair) Option {
 	return func(cfg *config) {
-		cfg.NoiseKeypair = kp
+		cfg.noiseKeypair = kp
 	}
 }
 
 type config struct {
-	NoiseKeypair      *Keypair
-	NoisePipesSupport bool
+	noiseKeypair      *Keypair
+	noisePipesSupport bool
 }
 
 type Option func(cfg *config)

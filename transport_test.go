@@ -23,8 +23,8 @@ func newTestTransport(t *testing.T, typ, bits int) *Transport {
 		t.Fatal(err)
 	}
 	return &Transport{
-		LocalID:    id,
-		PrivateKey: priv,
+		localID:    id,
+		privateKey: priv,
 	}
 }
 
@@ -38,9 +38,9 @@ func newTestTransportPipes(t *testing.T, typ, bits int) *Transport {
 		t.Fatal(err)
 	}
 	return &Transport{
-		LocalID:           id,
-		PrivateKey:        priv,
-		NoisePipesSupport: true,
+		localID:           id,
+		privateKey:        priv,
+		noisePipesSupport: true,
 	}
 }
 
@@ -86,7 +86,7 @@ func connect(t *testing.T, initTransport, respTransport *Transport) (*secureSess
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		initConn, initErr = initTransport.SecureOutbound(context.TODO(), init, respTransport.LocalID)
+		initConn, initErr = initTransport.SecureOutbound(context.TODO(), init, respTransport.localID)
 	}()
 
 	respConn, respErr := respTransport.SecureInbound(context.TODO(), resp)
@@ -111,11 +111,11 @@ func TestIDs(t *testing.T) {
 	defer initConn.Close()
 	defer respConn.Close()
 
-	if initConn.LocalPeer() != initTransport.LocalID {
+	if initConn.LocalPeer() != initTransport.localID {
 		t.Fatal("Initiator Local Peer ID mismatch.")
 	}
 
-	if respConn.RemotePeer() != initTransport.LocalID {
+	if respConn.RemotePeer() != initTransport.localID {
 		t.Fatal("Responder Remote Peer ID mismatch.")
 	}
 
@@ -124,8 +124,8 @@ func TestIDs(t *testing.T) {
 	}
 
 	// TODO: check after stage 0 of handshake if updated
-	if initConn.RemotePeer() != respTransport.LocalID {
-		t.Errorf("Initiator Remote Peer ID mismatch. expected %x got %x", respTransport.LocalID, initConn.RemotePeer())
+	if initConn.RemotePeer() != respTransport.localID {
+		t.Errorf("Initiator Remote Peer ID mismatch. expected %x got %x", respTransport.localID, initConn.RemotePeer())
 	}
 }
 
@@ -140,7 +140,7 @@ func TestKeys(t *testing.T) {
 	sk := respConn.LocalPrivateKey()
 	pk := sk.GetPublic()
 
-	if !sk.Equals(respTransport.PrivateKey) {
+	if !sk.Equals(respTransport.privateKey) {
 		t.Error("Private key Mismatch.")
 	}
 
@@ -223,10 +223,10 @@ func TestHandshakeIK(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	respTransport.NoiseKeypair = kp
+	respTransport.noiseKeypair = kp
 	keycache := NewKeyCache()
-	keycache.Store(respTransport.LocalID, respTransport.NoiseKeypair.publicKey)
-	initTransport.NoiseStaticKeyCache = keycache
+	keycache.Store(respTransport.localID, respTransport.noiseKeypair.publicKey)
+	initTransport.noiseStaticKeyCache = keycache
 
 	// do IK handshake
 	initConn, respConn := connect(t, initTransport, respTransport)

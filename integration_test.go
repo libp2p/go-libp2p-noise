@@ -71,8 +71,8 @@ func makeNodePipes(t *testing.T, seed int64, port int, rpid peer.ID, rpubkey [32
 		t.Fatal(err)
 	}
 
-	tpt.NoiseStaticKeyCache = NewKeyCache()
-	tpt.NoiseStaticKeyCache.Store(rpid, rpubkey)
+	tpt.noiseStaticKeyCache = NewKeyCache()
+	tpt.noiseStaticKeyCache.Store(rpid, rpubkey)
 
 	ip := "0.0.0.0"
 	addr, err := ma.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%d", ip, port))
