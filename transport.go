@@ -3,7 +3,6 @@ package noise
 import (
 	"context"
 	"crypto/rand"
-	"fmt"
 	"net"
 
 	"golang.org/x/crypto/curve25519"
@@ -28,12 +27,9 @@ type Keypair struct {
 func GenerateKeypair() (*Keypair, error) {
 	var public_key [32]byte
 	var private_key [32]byte
-	c, err := rand.Read(private_key[:])
+	_, err := rand.Read(private_key[:])
 	if err != nil {
 		return nil, err
-	}
-	if c != 32 {
-		return nil, fmt.Errorf("unable to generate 32 bytes of random data, got %d", c)
 	}
 	curve25519.ScalarBaseMult(&public_key, &private_key)
 	return &Keypair{public_key, private_key}, nil
