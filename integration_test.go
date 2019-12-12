@@ -147,7 +147,10 @@ func TestLibp2pIntegration_NoPipes(t *testing.T) {
 func TestLibp2pIntegration_WithPipes(t *testing.T) {
 	ctx := context.Background()
 
-	kpa := GenerateKeypair()
+	kpa, err := GenerateKeypair()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	ha, err := makeNodePipes(t, 1, 33333, "", [32]byte{}, kpa)
 	if err != nil {
@@ -201,7 +204,10 @@ func TestLibp2pIntegration_WithPipes(t *testing.T) {
 func TestLibp2pIntegration_XXFallback(t *testing.T) {
 	ctx := context.Background()
 
-	kpa := GenerateKeypair()
+	kpa, err := GenerateKeypair()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	ha, err := makeNode(t, 1, 33333, kpa)
 	if err != nil {
@@ -253,7 +259,10 @@ func TestLibp2pIntegration_XXFallback(t *testing.T) {
 }
 
 func TestConstrucingWithMaker(t *testing.T) {
-	kp := GenerateKeypair()
+	kp, err := GenerateKeypair()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	ctx := context.Background()
 	h, err := libp2p.New(ctx,

@@ -75,7 +75,11 @@ func newSecureSession(ctx context.Context, local peer.ID, privKey crypto.PrivKey
 	}
 
 	if kp == nil {
-		kp = GenerateKeypair()
+		var err error
+		kp, err = GenerateKeypair()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	localPeerInfo := peerInfo{

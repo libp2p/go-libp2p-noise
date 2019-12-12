@@ -219,7 +219,11 @@ func TestHandshakeIK(t *testing.T) {
 	respTransport := newTestTransportPipes(t, crypto.Ed25519, 2048)
 
 	// add responder's static key to initiator's key cache
-	respTransport.NoiseKeypair = GenerateKeypair()
+	kp, err := GenerateKeypair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	respTransport.NoiseKeypair = kp
 	keycache := NewKeyCache()
 	keycache.Store(respTransport.LocalID, respTransport.NoiseKeypair.public_key)
 	initTransport.NoiseStaticKeyCache = keycache
@@ -230,7 +234,7 @@ func TestHandshakeIK(t *testing.T) {
 	defer respConn.Close()
 
 	before := []byte("hello world")
-	_, err := initConn.Write(before)
+	_, err = initConn.Write(before)
 	if err != nil {
 		t.Fatal(err)
 	}

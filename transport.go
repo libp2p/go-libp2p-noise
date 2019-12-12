@@ -3,6 +3,7 @@ package noise
 import (
 	"context"
 	"crypto/rand"
+	"fmt"
 	"net"
 
 	"golang.org/x/crypto/curve25519"
@@ -24,12 +25,18 @@ type Keypair struct {
 }
 
 // GenerateKeypair creates a new ed25519 keypair
-func GenerateKeypair() *Keypair {
+func GenerateKeypair() (*Keypair, error) {
 	var public_key [32]byte
 	var private_key [32]byte
-	_, _ = rand.Read(private_key[:])
+	c, err := rand.Read(private_key[:])
+	if err != nil {
+		return nil, err
+	}
+	if c != 32 {
+		return nil, fmt.Errorf("unable to generate 32 bytes of random data, got %d", c)
+	}
 	curve25519.ScalarBaseMult(&public_key, &private_key)
-	return &Keypair{public_key, private_key}
+	return &Keypair{public_key, private_key}, nil
 }
 
 // Transport implements the interface sec.SecureTransport
@@ -102,7 +109,10 @@ func New(privkey crypto.PrivKey, options ...Option) (*Transport, error) {
 
 	kp := cfg.NoiseKeypair
 	if kp == nil {
-		kp = GenerateKeypair()
+		kp, err = GenerateKeypair()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// the static key cache is only useful if Noise Pipes is enabled
