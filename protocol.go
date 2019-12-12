@@ -83,7 +83,7 @@ func newSecureSession(ctx context.Context, local peer.ID, privKey crypto.PrivKey
 	}
 
 	localPeerInfo := peerInfo{
-		noiseKey:  kp.public_key,
+		noiseKey:  kp.publicKey,
 		libp2pKey: privKey.GetPublic(),
 	}
 
@@ -111,11 +111,11 @@ func (s *secureSession) NoiseStaticKeyCache() *KeyCache {
 }
 
 func (s *secureSession) NoisePublicKey() [32]byte {
-	return s.noiseKeypair.public_key
+	return s.noiseKeypair.publicKey
 }
 
 func (s *secureSession) NoisePrivateKey() [32]byte {
-	return s.noiseKeypair.private_key
+	return s.noiseKeypair.privateKey
 }
 
 func (s *secureSession) readLength() (int, error) {
@@ -165,7 +165,7 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 	}
 
 	// sign noise data for payload
-	noise_pub := s.noiseKeypair.public_key
+	noise_pub := s.noiseKeypair.publicKey
 	signedPayload, err := s.localKey.Sign(append([]byte(payload_string), noise_pub[:]...))
 	if err != nil {
 		log.Errorf("runHandshake signing payload err=%s", err)

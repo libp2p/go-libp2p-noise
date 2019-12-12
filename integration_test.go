@@ -159,7 +159,7 @@ func TestLibp2pIntegration_WithPipes(t *testing.T) {
 
 	defer ha.Close()
 
-	hb, err := makeNodePipes(t, 2, 34343, ha.ID(), kpa.public_key, nil)
+	hb, err := makeNodePipes(t, 2, 34343, ha.ID(), kpa.publicKey, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -216,7 +216,7 @@ func TestLibp2pIntegration_XXFallback(t *testing.T) {
 
 	defer ha.Close()
 
-	hb, err := makeNodePipes(t, 2, 34343, ha.ID(), kpa.public_key, nil)
+	hb, err := makeNodePipes(t, 2, 34343, ha.ID(), kpa.publicKey, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

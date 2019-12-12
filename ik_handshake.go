@@ -80,7 +80,7 @@ func (s *secureSession) ik_recvHandshakeMessage(initial_stage bool) (buf []byte,
 //     <- e, ee, se
 // returns last successful message upon error
 func (s *secureSession) runHandshake_ik(ctx context.Context, payload []byte) ([]byte, error) {
-	kp := ik.NewKeypair(s.noiseKeypair.public_key, s.noiseKeypair.private_key)
+	kp := ik.NewKeypair(s.noiseKeypair.publicKey, s.noiseKeypair.privateKey)
 
 	log.Debugf("runHandshake_ik initiator=%v pubkey=%x", kp.PubKey(), s.initiator)
 

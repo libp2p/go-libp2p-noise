@@ -225,7 +225,7 @@ func TestHandshakeIK(t *testing.T) {
 	}
 	respTransport.NoiseKeypair = kp
 	keycache := NewKeyCache()
-	keycache.Store(respTransport.LocalID, respTransport.NoiseKeypair.public_key)
+	keycache.Store(respTransport.LocalID, respTransport.NoiseKeypair.publicKey)
 	initTransport.NoiseStaticKeyCache = keycache
 
 	// do IK handshake
