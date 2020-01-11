@@ -90,7 +90,7 @@ func newSecureSession(tpt *Transport, ctx context.Context, insecure net.Conn, re
 	s := &secureSession{
 		insecure:            insecure,
 		initiator:           initiator,
-		prologue:            []byte(ID),
+		prologue:            []byte{},
 		localKey:            tpt.privateKey,
 		localPeer:           tpt.localID,
 		remotePeer:          remote,
