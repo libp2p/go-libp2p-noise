@@ -2,10 +2,7 @@ package noise
 
 import (
 	"context"
-	"crypto/rand"
 	"net"
-
-	"golang.org/x/crypto/curve25519"
 
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -17,32 +14,14 @@ const ID = "/noise"
 
 var _ sec.SecureTransport = &Transport{}
 
-// Keypair is a noise ed25519 public-private keypair
-type Keypair struct {
-	public_key  [32]byte
-	private_key [32]byte
-}
-
-// GenerateKeypair creates a new ed25519 keypair
-func GenerateKeypair() (*Keypair, error) {
-	var public_key [32]byte
-	var private_key [32]byte
-	_, err := rand.Read(private_key[:])
-	if err != nil {
-		return nil, err
-	}
-	curve25519.ScalarBaseMult(&public_key, &private_key)
-	return &Keypair{public_key, private_key}, nil
-}
-
 // Transport implements the interface sec.SecureTransport
 // https://godoc.org/github.com/libp2p/go-libp2p-core/sec#SecureConn
 type Transport struct {
-	LocalID             peer.ID
-	PrivateKey          crypto.PrivKey
-	NoisePipesSupport   bool
-	NoiseStaticKeyCache *KeyCache
-	NoiseKeypair        *Keypair
+	localID             peer.ID
+	privateKey          crypto.PrivKey
+	noisePipesSupport   bool
+	noiseStaticKeyCache *KeyCache
+	noiseKeypair        *Keypair
 }
 
 type transportConstructor func(crypto.PrivKey) (*Transport, error)
@@ -103,7 +82,7 @@ func New(privkey crypto.PrivKey, options ...Option) (*Transport, error) {
 	cfg := config{}
 	cfg.applyOptions(options...)
 
-	kp := cfg.NoiseKeypair
+	kp := cfg.noiseKeypair
 	if kp == nil {
 		kp, err = GenerateKeypair()
 		if err != nil {
@@ -113,37 +92,25 @@ func New(privkey crypto.PrivKey, options ...Option) (*Transport, error) {
 
 	// the static key cache is only useful if Noise Pipes is enabled
 	var keyCache *KeyCache
-	if cfg.NoisePipesSupport {
+	if cfg.noisePipesSupport {
 		keyCache = NewKeyCache()
 	}
 
 	return &Transport{
-		LocalID:             localID,
-		PrivateKey:          privkey,
-		NoisePipesSupport:   cfg.NoisePipesSupport,
-		NoiseKeypair:        kp,
-		NoiseStaticKeyCache: keyCache,
+		localID:             localID,
+		privateKey:          privkey,
+		noisePipesSupport:   cfg.noisePipesSupport,
+		noiseKeypair:        kp,
+		noiseStaticKeyCache: keyCache,
 	}, nil
 }
 
 // SecureInbound runs noise handshake as the responder
 func (t *Transport) SecureInbound(ctx context.Context, insecure net.Conn) (sec.SecureConn, error) {
-	s, err := newSecureSession(ctx, t.LocalID, t.PrivateKey, t.NoiseKeypair, insecure, "", t.NoiseStaticKeyCache, t.NoisePipesSupport, false)
-	if err != nil {
-		return s, err
-	}
-
-	t.NoiseKeypair = s.noiseKeypair
-	return s, nil
+	return newSecureSession(t, ctx, insecure, "", false)
 }
 
 // SecureOutbound runs noise handshake as the initiator
 func (t *Transport) SecureOutbound(ctx context.Context, insecure net.Conn, p peer.ID) (sec.SecureConn, error) {
-	s, err := newSecureSession(ctx, t.LocalID, t.PrivateKey, t.NoiseKeypair, insecure, p, t.NoiseStaticKeyCache, t.NoisePipesSupport, true)
-	if err != nil {
-		return s, err
-	}
-
-	t.NoiseKeypair = s.noiseKeypair
-	return s, nil
+	return newSecureSession(t, ctx, insecure, p, true)
 }

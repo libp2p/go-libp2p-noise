@@ -71,8 +71,8 @@ func makeNodePipes(t *testing.T, seed int64, port int, rpid peer.ID, rpubkey [32
 		t.Fatal(err)
 	}
 
-	tpt.NoiseStaticKeyCache = NewKeyCache()
-	tpt.NoiseStaticKeyCache.Store(rpid, rpubkey)
+	tpt.noiseStaticKeyCache = NewKeyCache()
+	tpt.noiseStaticKeyCache.Store(rpid, rpubkey)
 
 	ip := "0.0.0.0"
 	addr, err := ma.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%d", ip, port))
@@ -159,7 +159,7 @@ func TestLibp2pIntegration_WithPipes(t *testing.T) {
 
 	defer ha.Close()
 
-	hb, err := makeNodePipes(t, 2, 34343, ha.ID(), kpa.public_key, nil)
+	hb, err := makeNodePipes(t, 2, 34343, ha.ID(), kpa.publicKey, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -216,7 +216,7 @@ func TestLibp2pIntegration_XXFallback(t *testing.T) {
 
 	defer ha.Close()
 
-	hb, err := makeNodePipes(t, 2, 34343, ha.ID(), kpa.public_key, nil)
+	hb, err := makeNodePipes(t, 2, 34343, ha.ID(), kpa.publicKey, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

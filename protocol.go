@@ -3,6 +3,7 @@ package noise
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"net"
 	"sync"
@@ -26,6 +27,8 @@ const payload_string = "noise-libp2p-static-key:"
 const maxPlaintextLength = 65519
 
 var log = logging.Logger("noise")
+
+var errNoKeypair = errors.New("cannot initiate secureSession - transport has no noise keypair")
 
 type secureSession struct {
 	insecure net.Conn
@@ -60,45 +63,42 @@ type peerInfo struct {
 	libp2pKey crypto.PubKey
 }
 
-// newSecureSession creates a noise session that can be configured to be initialized with a static
-// noise key `noisePrivateKey`, a cache of previous peer noise keys `noiseStaticKeyCache`, an
-// option `noisePipesSupport` to turn on or off noise pipes
+// newSecureSession creates a noise session over the given insecure Conn, using the static
+// Noise keypair and libp2p identity keypair from the given Transport.
 //
-// With noise pipes off, we always do XX
-// With noise pipes on, we first try IK, if that fails, move to XXfallback
-func newSecureSession(ctx context.Context, local peer.ID, privKey crypto.PrivKey, kp *Keypair,
-	insecure net.Conn, remote peer.ID, noiseStaticKeyCache *KeyCache,
-	noisePipesSupport bool, initiator bool) (*secureSession, error) {
-
-	if noiseStaticKeyCache == nil {
-		noiseStaticKeyCache = NewKeyCache()
+// If tpt.noisePipesSupport == true, the Noise Pipes handshake protocol will be used,
+// which consists of the IK and XXfallback handshake patterns. With Noise Pipes on, we first try IK,
+// if that fails, move to XXfallback. With Noise Pipes off, we always do XX.
+func newSecureSession(tpt *Transport, ctx context.Context, insecure net.Conn, remote peer.ID, initiator bool) (*secureSession, error) {
+	if tpt.noiseKeypair == nil {
+		return nil, errNoKeypair
 	}
 
-	if kp == nil {
-		var err error
-		kp, err = GenerateKeypair()
-		if err != nil {
-			return nil, err
-		}
+	// if the transport doesn't have a key cache, we make a new one just for
+	// this session. it's a bit of a waste, but saves us having to check if
+	// it's nil later
+	keyCache := tpt.noiseStaticKeyCache
+	if keyCache == nil {
+		keyCache = NewKeyCache()
 	}
 
 	localPeerInfo := peerInfo{
-		noiseKey:  kp.public_key,
-		libp2pKey: privKey.GetPublic(),
+		noiseKey:  tpt.noiseKeypair.publicKey,
+		libp2pKey: tpt.privateKey.GetPublic(),
 	}
 
 	s := &secureSession{
 		insecure:            insecure,
 		initiator:           initiator,
-		prologue:            []byte(ID),
-		localKey:            privKey,
-		localPeer:           local,
+		prologue:            []byte{},
+		localKey:            tpt.privateKey,
+		localPeer:           tpt.localID,
 		remotePeer:          remote,
 		local:               localPeerInfo,
-		noisePipesSupport:   noisePipesSupport,
-		noiseStaticKeyCache: noiseStaticKeyCache,
+		noisePipesSupport:   tpt.noisePipesSupport,
+		noiseStaticKeyCache: keyCache,
 		msgBuffer:           []byte{},
-		noiseKeypair:        kp,
+		noiseKeypair:        tpt.noiseKeypair,
 	}
 
 	err := s.runHandshake(ctx)
@@ -111,11 +111,11 @@ func (s *secureSession) NoiseStaticKeyCache() *KeyCache {
 }
 
 func (s *secureSession) NoisePublicKey() [32]byte {
-	return s.noiseKeypair.public_key
+	return s.noiseKeypair.publicKey
 }
 
 func (s *secureSession) NoisePrivateKey() [32]byte {
-	return s.noiseKeypair.private_key
+	return s.noiseKeypair.privateKey
 }
 
 func (s *secureSession) readLength() (int, error) {
@@ -165,7 +165,7 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 	}
 
 	// sign noise data for payload
-	noise_pub := s.noiseKeypair.public_key
+	noise_pub := s.noiseKeypair.publicKey
 	signedPayload, err := s.localKey.Sign(append([]byte(payload_string), noise_pub[:]...))
 	if err != nil {
 		log.Errorf("runHandshake signing payload err=%s", err)

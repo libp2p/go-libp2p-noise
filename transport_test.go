@@ -22,26 +22,21 @@ func newTestTransport(t *testing.T, typ, bits int) *Transport {
 	if err != nil {
 		t.Fatal(err)
 	}
+	kp, err := GenerateKeypair()
+	if err != nil {
+		t.Fatal(err)
+	}
 	return &Transport{
-		LocalID:    id,
-		PrivateKey: priv,
+		localID:      id,
+		privateKey:   priv,
+		noiseKeypair: kp,
 	}
 }
 
 func newTestTransportPipes(t *testing.T, typ, bits int) *Transport {
-	priv, pub, err := crypto.GenerateKeyPair(typ, bits)
-	if err != nil {
-		t.Fatal(err)
-	}
-	id, err := peer.IDFromPublicKey(pub)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return &Transport{
-		LocalID:           id,
-		PrivateKey:        priv,
-		NoisePipesSupport: true,
-	}
+	tpt := newTestTransport(t, typ, bits)
+	tpt.noisePipesSupport = true
+	return tpt
 }
 
 // Create a new pair of connected TCP sockets.
@@ -86,7 +81,7 @@ func connect(t *testing.T, initTransport, respTransport *Transport) (*secureSess
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		initConn, initErr = initTransport.SecureOutbound(context.TODO(), init, respTransport.LocalID)
+		initConn, initErr = initTransport.SecureOutbound(context.TODO(), init, respTransport.localID)
 	}()
 
 	respConn, respErr := respTransport.SecureInbound(context.TODO(), resp)
@@ -111,11 +106,11 @@ func TestIDs(t *testing.T) {
 	defer initConn.Close()
 	defer respConn.Close()
 
-	if initConn.LocalPeer() != initTransport.LocalID {
+	if initConn.LocalPeer() != initTransport.localID {
 		t.Fatal("Initiator Local Peer ID mismatch.")
 	}
 
-	if respConn.RemotePeer() != initTransport.LocalID {
+	if respConn.RemotePeer() != initTransport.localID {
 		t.Fatal("Responder Remote Peer ID mismatch.")
 	}
 
@@ -124,8 +119,8 @@ func TestIDs(t *testing.T) {
 	}
 
 	// TODO: check after stage 0 of handshake if updated
-	if initConn.RemotePeer() != respTransport.LocalID {
-		t.Errorf("Initiator Remote Peer ID mismatch. expected %x got %x", respTransport.LocalID, initConn.RemotePeer())
+	if initConn.RemotePeer() != respTransport.localID {
+		t.Errorf("Initiator Remote Peer ID mismatch. expected %x got %x", respTransport.localID, initConn.RemotePeer())
 	}
 }
 
@@ -140,7 +135,7 @@ func TestKeys(t *testing.T) {
 	sk := respConn.LocalPrivateKey()
 	pk := sk.GetPublic()
 
-	if !sk.Equals(respTransport.PrivateKey) {
+	if !sk.Equals(respTransport.privateKey) {
 		t.Error("Private key Mismatch.")
 	}
 
@@ -219,14 +214,9 @@ func TestHandshakeIK(t *testing.T) {
 	respTransport := newTestTransportPipes(t, crypto.Ed25519, 2048)
 
 	// add responder's static key to initiator's key cache
-	kp, err := GenerateKeypair()
-	if err != nil {
-		t.Fatal(err)
-	}
-	respTransport.NoiseKeypair = kp
 	keycache := NewKeyCache()
-	keycache.Store(respTransport.LocalID, respTransport.NoiseKeypair.public_key)
-	initTransport.NoiseStaticKeyCache = keycache
+	keycache.Store(respTransport.localID, respTransport.noiseKeypair.publicKey)
+	initTransport.noiseStaticKeyCache = keycache
 
 	// do IK handshake
 	initConn, respConn := connect(t, initTransport, respTransport)
@@ -234,7 +224,7 @@ func TestHandshakeIK(t *testing.T) {
 	defer respConn.Close()
 
 	before := []byte("hello world")
-	_, err = initConn.Write(before)
+	_, err := initConn.Write(before)
 	if err != nil {
 		t.Fatal(err)
 	}

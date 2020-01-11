@@ -82,7 +82,7 @@ func (s *secureSession) xx_recvHandshakeMessage(initial_stage bool) (buf []byte,
 // if fallback = true, initialMsg is used as the message in stage 1 of the initiator and stage 0
 // of the responder
 func (s *secureSession) runHandshake_xx(ctx context.Context, fallback bool, payload []byte, initialMsg []byte) (err error) {
-	kp := xx.NewKeypair(s.noiseKeypair.public_key, s.noiseKeypair.private_key)
+	kp := xx.NewKeypair(s.noiseKeypair.publicKey, s.noiseKeypair.privateKey)
 
 	log.Debugf("runHandshake_xx initiator=%v fallback=%v pubkey=%x", s.initiator, fallback, kp.PubKey())
 
