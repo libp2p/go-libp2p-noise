@@ -17,6 +17,8 @@ import (
 	"time"
 )
 
+const testProtocolID = "/test/noise/integration"
+
 func generateKey(seed int64) (crypto.PrivKey, error) {
 	var r io.Reader
 	if seed == 0 {
@@ -109,8 +111,8 @@ func TestLibp2pIntegration_NoPipes(t *testing.T) {
 
 	defer hb.Close()
 
-	ha.SetStreamHandler(ID, handleStream)
-	hb.SetStreamHandler(ID, handleStream)
+	ha.SetStreamHandler(testProtocolID, handleStream)
+	hb.SetStreamHandler(testProtocolID, handleStream)
 
 	addr, err := ma.NewMultiaddr(fmt.Sprintf("%s/p2p/%s", hb.Addrs()[0].String(), hb.ID()))
 	if err != nil {
@@ -129,7 +131,7 @@ func TestLibp2pIntegration_NoPipes(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	stream, err := ha.NewStream(ctx, hb.ID(), ID)
+	stream, err := ha.NewStream(ctx, hb.ID(), testProtocolID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,8 +168,8 @@ func TestLibp2pIntegration_WithPipes(t *testing.T) {
 
 	defer hb.Close()
 
-	ha.SetStreamHandler(ID, handleStream)
-	hb.SetStreamHandler(ID, handleStream)
+	ha.SetStreamHandler(testProtocolID, handleStream)
+	hb.SetStreamHandler(testProtocolID, handleStream)
 
 	addr, err := ma.NewMultiaddr(fmt.Sprintf("%s/p2p/%s", ha.Addrs()[0].String(), ha.ID()))
 	if err != nil {
@@ -186,7 +188,7 @@ func TestLibp2pIntegration_WithPipes(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	stream, err := hb.NewStream(ctx, ha.ID(), ID)
+	stream, err := hb.NewStream(ctx, ha.ID(), testProtocolID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -223,8 +225,8 @@ func TestLibp2pIntegration_XXFallback(t *testing.T) {
 
 	defer hb.Close()
 
-	ha.SetStreamHandler(ID, handleStream)
-	hb.SetStreamHandler(ID, handleStream)
+	ha.SetStreamHandler(testProtocolID, handleStream)
+	hb.SetStreamHandler(testProtocolID, handleStream)
 
 	addr, err := ma.NewMultiaddr(fmt.Sprintf("%s/p2p/%s", hb.Addrs()[0].String(), hb.ID()))
 	if err != nil {
@@ -243,7 +245,7 @@ func TestLibp2pIntegration_XXFallback(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	stream, err := hb.NewStream(ctx, ha.ID(), ID)
+	stream, err := hb.NewStream(ctx, ha.ID(), testProtocolID)
 	if err != nil {
 		t.Fatal(err)
 	}
