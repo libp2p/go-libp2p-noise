@@ -122,7 +122,7 @@ func (s *secureSession) runHandshake_ik(ctx context.Context, payload []byte) ([]
 		}
 
 		// set remote libp2p public key
-		err = s.setRemotePeerInfo(nhp.GetLibp2PKey())
+		err = s.setRemotePeerInfo(nhp.GetIdentityKey())
 		if err != nil {
 			log.Errorf("runHandshake_ik stage=1 initiator=true set remote peer info err=%s", err)
 			return buf, fmt.Errorf("runHandshake_ik stage=1 initiator=true err=read remote libp2p key fail")
@@ -161,7 +161,7 @@ func (s *secureSession) runHandshake_ik(ctx context.Context, payload []byte) ([]
 		}
 
 		// set remote libp2p public key
-		err = s.setRemotePeerInfo(nhp.GetLibp2PKey())
+		err = s.setRemotePeerInfo(nhp.GetIdentityKey())
 		if err != nil {
 			return buf, fmt.Errorf("runHandshake_ik stage=0 initiator=false err=read remote libp2p key fail")
 		}

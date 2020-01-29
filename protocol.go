@@ -142,7 +142,7 @@ func (s *secureSession) setRemotePeerID(key crypto.PubKey) (err error) {
 }
 
 func (s *secureSession) verifyPayload(payload *pb.NoiseHandshakePayload, noiseKey [32]byte) (err error) {
-	sig := payload.GetNoiseStaticKeySignature()
+	sig := payload.GetIdentitySig()
 	msg := append([]byte(payload_string), noiseKey[:]...)
 
 	log.Debugf("verifyPayload msg=%x", msg)
@@ -174,8 +174,8 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 
 	// create payload
 	payload := new(pb.NoiseHandshakePayload)
-	payload.Libp2PKey = localKeyRaw
-	payload.NoiseStaticKeySignature = signedPayload
+	payload.IdentityKey = localKeyRaw
+	payload.IdentitySig = signedPayload
 	payloadEnc, err := proto.Marshal(payload)
 	if err != nil {
 		log.Errorf("runHandshake marshal payload err=%s", err)

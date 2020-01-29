@@ -55,8 +55,8 @@ func TestHandshake(t *testing.T) {
 	// stage 0: initiator
 	// create payload
 	payload_init := new(pb.NoiseHandshakePayload)
-	payload_init.Libp2PKey = libp2p_pub_init_raw
-	payload_init.NoiseStaticKeySignature = libp2p_init_signed_payload
+	payload_init.IdentityKey = libp2p_pub_init_raw
+	payload_init.IdentitySig = libp2p_init_signed_payload
 	payload_init_enc, err := proto.Marshal(payload_init)
 	if err != nil {
 		t.Fatalf("proto marshal payload fail: %s", err)
@@ -84,8 +84,8 @@ func TestHandshake(t *testing.T) {
 	// stage 1: responder
 	// create payload
 	payload_resp := new(pb.NoiseHandshakePayload)
-	payload_resp.Libp2PKey = libp2p_pub_resp_raw
-	payload_resp.NoiseStaticKeySignature = libp2p_resp_signed_payload
+	payload_resp.IdentityKey = libp2p_pub_resp_raw
+	payload_resp.IdentitySig = libp2p_resp_signed_payload
 	payload_resp_enc, err := proto.Marshal(payload_resp)
 	if err != nil {
 		t.Fatalf("proto marshal payload fail: %s", err)
