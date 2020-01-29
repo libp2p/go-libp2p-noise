@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"sync"
 	"time"
@@ -121,14 +122,14 @@ func (s *secureSession) NoisePrivateKey() [32]byte {
 
 func (s *secureSession) readLength() (int, error) {
 	buf := make([]byte, 2)
-	_, err := fillBuffer(buf, s.insecure)
+	_, err := io.ReadFull(s.insecure, buf)
 	return int(binary.BigEndian.Uint16(buf)), err
 }
 
 func (s *secureSession) writeLength(length int) error {
 	buf := make([]byte, 2)
 	binary.BigEndian.PutUint16(buf, uint16(length))
-	_, err := writeAll(s.insecure, buf)
+	_, err := s.insecure.Write(buf)
 	return err
 }
 
@@ -259,7 +260,7 @@ func (s *secureSession) Read(buf []byte) (int, error) {
 
 		// read and decrypt ciphertext
 		ciphertext := make([]byte, l)
-		_, err = fillBuffer(ciphertext, s.insecure)
+		_, err = io.ReadFull(s.insecure, ciphertext)
 		if err != nil {
 			log.Error("read ciphertext err", err)
 			return 0, err
@@ -337,7 +338,7 @@ func (s *secureSession) Write(in []byte) (int, error) {
 			return 0, err
 		}
 
-		_, err = writeAll(s.insecure, ciphertext)
+		_, err = s.insecure.Write(ciphertext)
 		return len(in), err
 	}
 
