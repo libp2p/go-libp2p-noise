@@ -27,7 +27,7 @@ func (s *secureSession) xx_sendHandshakeMessage(payload []byte, initial_stage bo
 		return fmt.Errorf("xx_sendHandshakeMessage write length err=%s", err)
 	}
 
-	_, err = s.insecure.Write(encMsgBuf)
+	_, err = writeAll(s.insecure, encMsgBuf)
 	if err != nil {
 		log.Error("xx_sendHandshakeMessage initiator=%v err=%s", s.initiator, err)
 		return fmt.Errorf("xx_sendHandshakeMessage write to conn err=%s", err)
@@ -46,7 +46,7 @@ func (s *secureSession) xx_recvHandshakeMessage(initial_stage bool) (buf []byte,
 
 	buf = make([]byte, l)
 
-	_, err = s.insecure.Read(buf)
+	_, err = fillBuffer(buf, s.insecure)
 	if err != nil {
 		return buf, nil, false, fmt.Errorf("xx_recvHandshakeMessage read from conn err=%s", err)
 	}

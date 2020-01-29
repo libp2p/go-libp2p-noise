@@ -9,14 +9,14 @@ import (
 	"sync"
 	"time"
 
-	proto "github.com/gogo/protobuf/proto"
+	"github.com/gogo/protobuf/proto"
 	logging "github.com/ipfs/go-log"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
 
-	ik "github.com/libp2p/go-libp2p-noise/ik"
-	pb "github.com/libp2p/go-libp2p-noise/pb"
-	xx "github.com/libp2p/go-libp2p-noise/xx"
+	"github.com/libp2p/go-libp2p-noise/ik"
+	"github.com/libp2p/go-libp2p-noise/pb"
+	"github.com/libp2p/go-libp2p-noise/xx"
 )
 
 const payload_string = "noise-libp2p-static-key:"
@@ -55,7 +55,8 @@ type secureSession struct {
 	noiseKeypair *Keypair
 
 	msgBuffer []byte
-	rwLock    sync.Mutex
+	readLock  sync.Mutex
+	writeLock sync.Mutex
 }
 
 type peerInfo struct {
@@ -120,14 +121,14 @@ func (s *secureSession) NoisePrivateKey() [32]byte {
 
 func (s *secureSession) readLength() (int, error) {
 	buf := make([]byte, 2)
-	_, err := s.insecure.Read(buf)
+	_, err := fillBuffer(buf, s.insecure)
 	return int(binary.BigEndian.Uint16(buf)), err
 }
 
 func (s *secureSession) writeLength(length int) error {
 	buf := make([]byte, 2)
 	binary.BigEndian.PutUint16(buf, uint16(length))
-	_, err := s.insecure.Write(buf)
+	_, err := writeAll(s.insecure, buf)
 	return err
 }
 
@@ -237,6 +238,9 @@ func (s *secureSession) LocalPublicKey() crypto.PubKey {
 }
 
 func (s *secureSession) Read(buf []byte) (int, error) {
+	s.readLock.Lock()
+	defer s.readLock.Unlock()
+
 	l := len(buf)
 
 	// if we have previously unread bytes, and they fit into the buf, copy them over and return
@@ -255,7 +259,7 @@ func (s *secureSession) Read(buf []byte) (int, error) {
 
 		// read and decrypt ciphertext
 		ciphertext := make([]byte, l)
-		_, err = s.insecure.Read(ciphertext)
+		_, err = fillBuffer(ciphertext, s.insecure)
 		if err != nil {
 			log.Error("read ciphertext err", err)
 			return 0, err
@@ -317,8 +321,8 @@ func (s *secureSession) SetWriteDeadline(t time.Time) error {
 }
 
 func (s *secureSession) Write(in []byte) (int, error) {
-	s.rwLock.Lock()
-	defer s.rwLock.Unlock()
+	s.writeLock.Lock()
+	defer s.writeLock.Unlock()
 
 	writeChunk := func(in []byte) (int, error) {
 		ciphertext, err := s.Encrypt(in)
@@ -329,11 +333,11 @@ func (s *secureSession) Write(in []byte) (int, error) {
 
 		err = s.writeLength(len(ciphertext))
 		if err != nil {
-			log.Error("write length err", err)
+			log.Error("write length err: ", err)
 			return 0, err
 		}
 
-		_, err = s.insecure.Write(ciphertext)
+		_, err = writeAll(s.insecure, ciphertext)
 		return len(in), err
 	}
 
