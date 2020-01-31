@@ -5,7 +5,7 @@ go 1.12
 require (
 	github.com/ChainSafe/log15 v1.0.0
 	github.com/gogo/protobuf v1.3.1
-	github.com/golang/protobuf v1.3.2
+	github.com/golang/protobuf v1.3.3
 	github.com/ipfs/go-log v0.0.1
 	github.com/libp2p/go-libp2p v0.5.1
 	github.com/libp2p/go-libp2p-core v0.3.0
