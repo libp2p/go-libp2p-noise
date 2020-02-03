@@ -150,14 +150,22 @@ func TestPeerIDMismatchFailsHandshake(t *testing.T) {
 	init, resp := newConnPair(t)
 
 	var initErr error
-	done := make(chan struct{})
+	initDone := make(chan struct{})
 	go func() {
-		defer close(done)
+		defer close(initDone)
 		_, initErr = initTransport.SecureOutbound(context.TODO(), init, "a-random-peer-id")
 	}()
 
-	_, _ = respTransport.SecureInbound(context.TODO(), resp)
-	<-done
+	respDone := make(chan struct{})
+	go func() {
+		defer close(respDone)
+		_, _ = respTransport.SecureInbound(context.TODO(), resp)
+	}()
+
+	select {
+	case <-initDone:
+	case <-respDone:
+	}
 
 	if initErr == nil {
 		t.Fatal("expected initiator to fail with peer ID mismatch error")
