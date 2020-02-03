@@ -3,6 +3,7 @@ package noise
 import (
 	"context"
 	"fmt"
+	"github.com/libp2p/go-libp2p-core/peer"
 	"io"
 
 	proto "github.com/gogo/protobuf/proto"
@@ -117,10 +118,12 @@ func (s *secureSession) runHandshake_ik(ctx context.Context, payload []byte) ([]
 			return buf, fmt.Errorf("runHandshake_ik stage=1 initiator=true err=read remote libp2p key fail")
 		}
 
-		// assert that remote peer ID matches libp2p key
-		err = s.setRemotePeerID(s.RemotePublicKey())
-		if err != nil {
-			return buf, fmt.Errorf("runHandshake_ik stage=1 initiator=true err=%s", err)
+		// assert that remote peer ID matches libp2p public key
+		pid, err := peer.IDFromPublicKey(s.RemotePublicKey())
+		if pid != s.remotePeer {
+			return buf, fmt.Errorf("runHandshake_ik stage=1 initiator=true  check remote peer id err: expected %x got %x", s.remotePeer, pid)
+		} else if err != nil {
+			return buf, fmt.Errorf("runHandshake_ik stage=1 initiator=true  check remote peer id err %s", err)
 		}
 
 		// verify payload is signed by libp2p key
