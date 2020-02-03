@@ -1,4 +1,4 @@
-package ik
+package handshake
 
 import (
 	"crypto/rand"
@@ -47,10 +47,10 @@ func TestHandshake(t *testing.T) {
 	}
 
 	// initiator: new IK noise session
-	ns_init := InitSession(true, prologue, kp_init, kp_resp.PubKey())
+	ns_init := IKInitSession(true, prologue, kp_init, kp_resp.PubKey())
 
 	// responder: new IK noise session
-	ns_resp := InitSession(false, prologue, kp_resp, [32]byte{})
+	ns_resp := IKInitSession(false, prologue, kp_resp, [32]byte{})
 
 	// stage 0: initiator
 	// create payload
@@ -66,7 +66,7 @@ func TestHandshake(t *testing.T) {
 	var msgbuf MessageBuffer
 	msg := []byte{}
 	msg = append(msg, payload_init_enc[:]...)
-	ns_init, msgbuf = SendMessage(ns_init, msg)
+	ns_init, msgbuf = IKSendMessage(ns_init, msg)
 
 	t.Logf("stage 0 msgbuf: %v", msgbuf)
 	t.Logf("stage 0 msgbuf ne len: %d", len(msgbuf.NE()))
@@ -74,7 +74,7 @@ func TestHandshake(t *testing.T) {
 	// stage 0: responder
 	var plaintext []byte
 	var valid bool
-	ns_resp, plaintext, valid = RecvMessage(ns_resp, &msgbuf)
+	ns_resp, plaintext, valid = IKRecvMessage(ns_resp, &msgbuf)
 	if !valid {
 		t.Fatalf("stage 0 receive not valid")
 	}
@@ -91,14 +91,14 @@ func TestHandshake(t *testing.T) {
 		t.Fatalf("proto marshal payload fail: %s", err)
 	}
 	msg = append(msg, payload_resp_enc[:]...)
-	ns_resp, msgbuf = SendMessage(ns_resp, msg)
+	ns_resp, msgbuf = IKSendMessage(ns_resp, msg)
 
 	t.Logf("stage 1 msgbuf: %v", msgbuf)
 	t.Logf("stage 1 msgbuf ne len: %d", len(msgbuf.NE()))
 	t.Logf("stage 1 msgbuf ns len: %d", len(msgbuf.NS()))
 
 	// stage 1: initiator
-	ns_init, plaintext, valid = RecvMessage(ns_init, &msgbuf)
+	ns_init, plaintext, valid = IKRecvMessage(ns_init, &msgbuf)
 	if !valid {
 		t.Fatalf("stage 1 receive not valid")
 	}

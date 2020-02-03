@@ -15,9 +15,8 @@ import (
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
 
-	"github.com/libp2p/go-libp2p-noise/ik"
+	"github.com/libp2p/go-libp2p-noise/handshake"
 	"github.com/libp2p/go-libp2p-noise/pb"
-	"github.com/libp2p/go-libp2p-noise/xx"
 )
 
 const payload_string = "noise-libp2p-static-key:"
@@ -44,8 +43,8 @@ type secureSession struct {
 	local  peerInfo
 	remote peerInfo
 
-	xx_ns *xx.NoiseSession
-	ik_ns *ik.NoiseSession
+	xx_ns *handshake.NoiseSession
+	ik_ns *handshake.NoiseSession
 
 	xx_complete bool
 	ik_complete bool

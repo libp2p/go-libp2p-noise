@@ -5,21 +5,21 @@ import (
 	"fmt"
 	"io"
 
-	proto "github.com/gogo/protobuf/proto"
+	"github.com/gogo/protobuf/proto"
 	"github.com/libp2p/go-libp2p-core/peer"
 
-	pb "github.com/libp2p/go-libp2p-noise/pb"
-	xx "github.com/libp2p/go-libp2p-noise/xx"
+	"github.com/libp2p/go-libp2p-noise/handshake"
+	"github.com/libp2p/go-libp2p-noise/pb"
 )
 
 func (s *secureSession) xx_sendHandshakeMessage(payload []byte, initial_stage bool) error {
-	var msgbuf xx.MessageBuffer
-	s.xx_ns, msgbuf = xx.SendMessage(s.xx_ns, payload, nil)
+	var msgbuf handshake.MessageBuffer
+	s.xx_ns, msgbuf = handshake.XXSendMessage(s.xx_ns, payload, nil)
 	var encMsgBuf []byte
 	if initial_stage {
-		encMsgBuf = msgbuf.Encode0()
+		encMsgBuf = msgbuf.XXEncode0()
 	} else {
-		encMsgBuf = msgbuf.Encode1()
+		encMsgBuf = msgbuf.XXEncode1()
 	}
 
 	err := s.writeLength(len(encMsgBuf))
@@ -48,18 +48,18 @@ func (s *secureSession) xx_recvHandshakeMessage(initial_stage bool) (buf []byte,
 		return buf, nil, false, fmt.Errorf("xx_recvHandshakeMessage read from conn err=%s", err)
 	}
 
-	var msgbuf *xx.MessageBuffer
+	var msgbuf *handshake.MessageBuffer
 	if initial_stage {
-		msgbuf, err = xx.Decode0(buf)
+		msgbuf, err = handshake.XXDecode0(buf)
 	} else {
-		msgbuf, err = xx.Decode1(buf)
+		msgbuf, err = handshake.XXDecode1(buf)
 	}
 
 	if err != nil {
 		return buf, nil, false, fmt.Errorf("xx_recvHandshakeMessage decode msg err=%s", err)
 	}
 
-	s.xx_ns, plaintext, valid = xx.RecvMessage(s.xx_ns, msgbuf)
+	s.xx_ns, plaintext, valid = handshake.XXRecvMessage(s.xx_ns, msgbuf)
 	if !valid {
 		return buf, nil, false, fmt.Errorf("xx_recvHandshakeMessage validation fail")
 	}
@@ -75,10 +75,10 @@ func (s *secureSession) xx_recvHandshakeMessage(initial_stage bool) (buf []byte,
 // if fallback = true, initialMsg is used as the message in stage 1 of the initiator and stage 0
 // of the responder
 func (s *secureSession) runHandshake_xx(ctx context.Context, fallback bool, payload []byte, initialMsg []byte) (err error) {
-	kp := xx.NewKeypair(s.noiseKeypair.publicKey, s.noiseKeypair.privateKey)
+	kp := handshake.NewKeypair(s.noiseKeypair.publicKey, s.noiseKeypair.privateKey)
 
 	// new XX noise session
-	s.xx_ns = xx.InitSession(s.initiator, s.prologue, kp, [32]byte{})
+	s.xx_ns = handshake.XXInitSession(s.initiator, s.prologue, kp, [32]byte{})
 
 	if s.initiator {
 		// stage 0 //
@@ -90,10 +90,10 @@ func (s *secureSession) runHandshake_xx(ctx context.Context, fallback bool, payl
 			}
 		} else {
 			e_ik := s.ik_ns.Ephemeral()
-			e_xx := xx.NewKeypair(e_ik.PubKey(), e_ik.PrivKey())
+			e_xx := handshake.NewKeypair(e_ik.PubKey(), e_ik.PrivKey())
 
 			// initialize state as if we sent the first message
-			s.xx_ns, _ = xx.SendMessage(s.xx_ns, nil, &e_xx)
+			s.xx_ns, _ = handshake.XXSendMessage(s.xx_ns, nil, &e_xx)
 		}
 
 		// stage 1 //
@@ -111,14 +111,14 @@ func (s *secureSession) runHandshake_xx(ctx context.Context, fallback bool, payl
 				return fmt.Errorf("runHandshake_xx stage 1 initiator validation fail")
 			}
 		} else {
-			var msgbuf *xx.MessageBuffer
-			msgbuf, err = xx.Decode1(initialMsg)
+			var msgbuf *handshake.MessageBuffer
+			msgbuf, err = handshake.XXDecode1(initialMsg)
 
 			if err != nil {
 				return fmt.Errorf("runHandshake_xx decode msg fail: %s", err)
 			}
 
-			s.xx_ns, plaintext, valid = xx.RecvMessage(s.xx_ns, msgbuf)
+			s.xx_ns, plaintext, valid = handshake.XXRecvMessage(s.xx_ns, msgbuf)
 			if !valid {
 				return fmt.Errorf("runHandshake_xx validation fail")
 			}
@@ -183,14 +183,14 @@ func (s *secureSession) runHandshake_xx(ctx context.Context, fallback bool, payl
 			}
 
 		} else {
-			var msgbuf *xx.MessageBuffer
-			msgbuf, err = xx.Decode0(initialMsg)
+			var msgbuf *handshake.MessageBuffer
+			msgbuf, err = handshake.XXDecode0(initialMsg)
 			if err != nil {
 				return err
 			}
 
-			xx_msgbuf := xx.NewMessageBuffer(msgbuf.NE(), nil, nil)
-			s.xx_ns, plaintext, valid = xx.RecvMessage(s.xx_ns, &xx_msgbuf)
+			xx_msgbuf := handshake.NewMessageBuffer(msgbuf.NE(), nil, nil)
+			s.xx_ns, plaintext, valid = handshake.XXRecvMessage(s.xx_ns, &xx_msgbuf)
 			if !valid {
 				return fmt.Errorf("runHandshake_xx validation fail")
 			}

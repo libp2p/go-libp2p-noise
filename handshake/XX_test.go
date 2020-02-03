@@ -1,4 +1,4 @@
-package xx
+package handshake
 
 import (
 	"crypto/rand"
@@ -67,10 +67,10 @@ func doHandshake(t *testing.T) (*NoiseSession, *NoiseSession) {
 	}
 
 	// initiator: new XX noise session
-	ns_init := InitSession(true, prologue, kp_init, kp_resp.PubKey())
+	ns_init := XXInitSession(true, prologue, kp_init, kp_resp.PubKey())
 
 	// responder: new XX noise session
-	ns_resp := InitSession(false, prologue, kp_resp, kp_init.PubKey())
+	ns_resp := XXInitSession(false, prologue, kp_resp, kp_init.PubKey())
 
 	// stage 0: initiator
 	// create payload
@@ -86,7 +86,7 @@ func doHandshake(t *testing.T) (*NoiseSession, *NoiseSession) {
 	var msgbuf MessageBuffer
 	msg := []byte{}
 	msg = append(msg, payload_init_enc[:]...)
-	ns_init, msgbuf = SendMessage(ns_init, msg, nil)
+	ns_init, msgbuf = XXSendMessage(ns_init, msg, nil)
 
 	t.Logf("stage 0 msgbuf: %v", msgbuf)
 	t.Logf("stage 0 msgbuf ne len: %d", len(msgbuf.NE()))
@@ -94,7 +94,7 @@ func doHandshake(t *testing.T) (*NoiseSession, *NoiseSession) {
 	// stage 0: responder
 	var plaintext []byte
 	var valid bool
-	ns_resp, plaintext, valid = RecvMessage(ns_resp, &msgbuf)
+	ns_resp, plaintext, valid = XXRecvMessage(ns_resp, &msgbuf)
 	if !valid {
 		t.Fatalf("stage 0 receive not valid")
 	}
@@ -111,14 +111,14 @@ func doHandshake(t *testing.T) (*NoiseSession, *NoiseSession) {
 		t.Fatalf("proto marshal payload fail: %s", err)
 	}
 	msg = append(msg, payload_resp_enc[:]...)
-	ns_resp, msgbuf = SendMessage(ns_resp, msg, nil)
+	ns_resp, msgbuf = XXSendMessage(ns_resp, msg, nil)
 
 	t.Logf("stage 1 msgbuf: %v", msgbuf)
 	t.Logf("stage 1 msgbuf ne len: %d", len(msgbuf.NE()))
 	t.Logf("stage 1 msgbuf ns len: %d", len(msgbuf.NS()))
 
 	// stage 1: initiator
-	ns_init, plaintext, valid = RecvMessage(ns_init, &msgbuf)
+	ns_init, plaintext, valid = XXRecvMessage(ns_init, &msgbuf)
 	if !valid {
 		t.Fatalf("stage 1 receive not valid")
 	}
@@ -128,14 +128,14 @@ func doHandshake(t *testing.T) (*NoiseSession, *NoiseSession) {
 	// stage 2: initiator
 	// send message
 	//msg = append(msg, payload_init_enc[:]...)
-	ns_init, msgbuf = SendMessage(ns_init, nil, nil)
+	ns_init, msgbuf = XXSendMessage(ns_init, nil, nil)
 
 	t.Logf("stage 2 msgbuf: %v", msgbuf)
 	t.Logf("stage 2 msgbuf ne len: %d", len(msgbuf.NE()))
 	t.Logf("stage 2 msgbuf ns len: %d", len(msgbuf.NS()))
 
 	// stage 2: responder
-	ns_resp, plaintext, valid = RecvMessage(ns_resp, &msgbuf)
+	ns_resp, plaintext, valid = XXRecvMessage(ns_resp, &msgbuf)
 	if !valid {
 		t.Fatalf("stage 2 receive not valid")
 	}
@@ -145,7 +145,7 @@ func doHandshake(t *testing.T) (*NoiseSession, *NoiseSession) {
 	return ns_init, ns_resp
 }
 
-func TestHandshake(t *testing.T) {
+func TestXXHandshake(t *testing.T) {
 	_, _ = doHandshake(t)
 }
 

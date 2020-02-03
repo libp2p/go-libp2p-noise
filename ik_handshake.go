@@ -7,18 +7,18 @@ import (
 	"io"
 
 	proto "github.com/gogo/protobuf/proto"
-	ik "github.com/libp2p/go-libp2p-noise/ik"
+	handshake "github.com/libp2p/go-libp2p-noise/handshake"
 	pb "github.com/libp2p/go-libp2p-noise/pb"
 )
 
 func (s *secureSession) ik_sendHandshakeMessage(payload []byte, initial_stage bool) error {
-	var msgbuf ik.MessageBuffer
-	s.ik_ns, msgbuf = ik.SendMessage(s.ik_ns, payload)
+	var msgbuf handshake.MessageBuffer
+	s.ik_ns, msgbuf = handshake.IKSendMessage(s.ik_ns, payload)
 	var encMsgBuf []byte
 	if initial_stage {
-		encMsgBuf = msgbuf.Encode0()
+		encMsgBuf = msgbuf.IKEncode0()
 	} else {
-		encMsgBuf = msgbuf.Encode1()
+		encMsgBuf = msgbuf.IKEncode1()
 	}
 
 	err := s.writeLength(len(encMsgBuf))
@@ -48,18 +48,18 @@ func (s *secureSession) ik_recvHandshakeMessage(initial_stage bool) (buf []byte,
 		return buf, nil, false, fmt.Errorf("ik_recvHandshakeMessage read from conn err=%s", err)
 	}
 
-	var msgbuf *ik.MessageBuffer
+	var msgbuf *handshake.MessageBuffer
 	if initial_stage {
-		msgbuf, err = ik.Decode0(buf)
+		msgbuf, err = handshake.IKDecode0(buf)
 	} else {
-		msgbuf, err = ik.Decode1(buf)
+		msgbuf, err = handshake.IKDecode1(buf)
 	}
 
 	if err != nil {
 		return buf, nil, false, fmt.Errorf("ik_recvHandshakeMessage decode msg fail: %s", err)
 	}
 
-	s.ik_ns, plaintext, valid = ik.RecvMessage(s.ik_ns, msgbuf)
+	s.ik_ns, plaintext, valid = handshake.IKRecvMessage(s.ik_ns, msgbuf)
 	if !valid {
 		return buf, nil, false, fmt.Errorf("ik_recvHandshakeMessage validation fail")
 	}
@@ -74,12 +74,12 @@ func (s *secureSession) ik_recvHandshakeMessage(initial_stage bool) (buf []byte,
 //     <- e, ee, se
 // returns last successful message upon error
 func (s *secureSession) runHandshake_ik(ctx context.Context, payload []byte) ([]byte, error) {
-	kp := ik.NewKeypair(s.noiseKeypair.publicKey, s.noiseKeypair.privateKey)
+	kp := handshake.NewKeypair(s.noiseKeypair.publicKey, s.noiseKeypair.privateKey)
 
 	remoteNoiseKey := s.noiseStaticKeyCache.Load(s.remotePeer)
 
 	// new IK noise session
-	s.ik_ns = ik.InitSession(s.initiator, s.prologue, kp, remoteNoiseKey)
+	s.ik_ns = handshake.IKInitSession(s.initiator, s.prologue, kp, remoteNoiseKey)
 
 	if s.initiator {
 		// bail out early if we don't know the remote Noise key
