@@ -13,7 +13,7 @@ import (
 
 func (s *secureSession) ik_sendHandshakeMessage(payload []byte, initial_stage bool) error {
 	var msgbuf handshake.MessageBuffer
-	s.ik_ns, msgbuf = handshake.IKSendMessage(s.ik_ns, payload)
+	s.ns, msgbuf = handshake.IKSendMessage(s.ns, payload)
 	var encMsgBuf []byte
 	if initial_stage {
 		encMsgBuf = msgbuf.IKEncode0()
@@ -59,7 +59,7 @@ func (s *secureSession) ik_recvHandshakeMessage(initial_stage bool) (buf []byte,
 		return buf, nil, false, fmt.Errorf("ik_recvHandshakeMessage decode msg fail: %s", err)
 	}
 
-	s.ik_ns, plaintext, valid = handshake.IKRecvMessage(s.ik_ns, msgbuf)
+	s.ns, plaintext, valid = handshake.IKRecvMessage(s.ns, msgbuf)
 	if !valid {
 		return buf, nil, false, fmt.Errorf("ik_recvHandshakeMessage validation fail")
 	}
@@ -79,7 +79,7 @@ func (s *secureSession) runHandshake_ik(ctx context.Context, payload []byte) ([]
 	remoteNoiseKey := s.noiseStaticKeyCache.Load(s.remotePeer)
 
 	// new IK noise session
-	s.ik_ns = handshake.IKInitSession(s.initiator, s.prologue, kp, remoteNoiseKey)
+	s.ns = handshake.IKInitSession(s.initiator, s.prologue, kp, remoteNoiseKey)
 
 	if s.initiator {
 		// bail out early if we don't know the remote Noise key
@@ -165,7 +165,7 @@ func (s *secureSession) runHandshake_ik(ctx context.Context, payload []byte) ([]
 		}
 
 		// verify payload is signed by libp2p key
-		err = s.verifyPayload(nhp, s.ik_ns.RemoteKey())
+		err = s.verifyPayload(nhp, s.ns.RemoteKey())
 		if err != nil {
 			return buf, fmt.Errorf("runHandshake_ik stage=0 initiator=false verify payload err=%s", err)
 		}

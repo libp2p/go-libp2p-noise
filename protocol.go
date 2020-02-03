@@ -43,8 +43,7 @@ type secureSession struct {
 	local  peerInfo
 	remote peerInfo
 
-	xx_ns *handshake.NoiseSession
-	ik_ns *handshake.NoiseSession
+	ns *handshake.NoiseSession
 
 	xx_complete bool
 	ik_complete bool
