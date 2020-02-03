@@ -24,14 +24,12 @@ func (s *secureSession) ik_sendHandshakeMessage(payload []byte, initial_stage bo
 
 	err := s.writeLength(len(encMsgBuf))
 	if err != nil {
-		log.Error("ik_sendHandshakeMessage initiator=%v err=%s", s.initiator, err)
 		return fmt.Errorf("ik_sendHandshakeMessage write length err=%s", err)
 	}
 
 	// send message
 	_, err = s.insecure.Write(encMsgBuf)
 	if err != nil {
-		log.Error("ik_sendHandshakeMessage initiator=%v err=%s", s.initiator, err)
 		return fmt.Errorf("ik_sendHandshakeMessage write to conn err=%s", err)
 	}
 
@@ -61,13 +59,11 @@ func (s *secureSession) ik_recvHandshakeMessage(initial_stage bool) (buf []byte,
 	log.Debugf("ik_recvHandshakeMessage initiator=%v msgbuf=%v", s.initiator, msgbuf)
 
 	if err != nil {
-		log.Errorf("ik_recvHandshakeMessage initiator=%v decode err=%s", s.initiator, err)
 		return buf, nil, false, fmt.Errorf("ik_recvHandshakeMessage decode msg fail: %s", err)
 	}
 
 	s.ik_ns, plaintext, valid = ik.RecvMessage(s.ik_ns, msgbuf)
 	if !valid {
-		log.Errorf("ik_recvHandshakeMessage initiator=%v err=%s", s.initiator, "validation fail")
 		return buf, nil, false, fmt.Errorf("ik_recvHandshakeMessage validation fail")
 	}
 
@@ -99,7 +95,6 @@ func (s *secureSession) runHandshake_ik(ctx context.Context, payload []byte) ([]
 		// stage 0 //
 		err := s.ik_sendHandshakeMessage(payload, true)
 		if err != nil {
-			log.Errorf("runHandshake_ik stage=0 initiator=true send err=%s", err)
 			return nil, fmt.Errorf("runHandshake_ik stage=0 initiator=true err=%s", err)
 		}
 
@@ -125,20 +120,19 @@ func (s *secureSession) runHandshake_ik(ctx context.Context, payload []byte) ([]
 		// set remote libp2p public key
 		err = s.setRemotePeerInfo(nhp.GetIdentityKey())
 		if err != nil {
-			log.Errorf("runHandshake_ik stage=1 initiator=true set remote peer info err=%s", err)
 			return buf, fmt.Errorf("runHandshake_ik stage=1 initiator=true err=read remote libp2p key fail")
 		}
 
 		// assert that remote peer ID matches libp2p key
 		err = s.setRemotePeerID(s.RemotePublicKey())
 		if err != nil {
-			log.Errorf("runHandshake_ik stage=1 initiator=true set remote peer id err=%s", err)
+			return buf, fmt.Errorf("runHandshake_ik stage=1 initiator=true err=%s", err)
 		}
 
 		// verify payload is signed by libp2p key
 		err = s.verifyPayload(nhp, remoteNoiseKey)
 		if err != nil {
-			log.Errorf("runHandshake_ik stage=1 initiator=true verify payload err=%s", err)
+			return buf, fmt.Errorf("runHandshake_ik stage=1 initiator=true verify payload err=%s", err)
 		}
 
 	} else {

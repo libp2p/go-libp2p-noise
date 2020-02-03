@@ -24,13 +24,11 @@ func (s *secureSession) xx_sendHandshakeMessage(payload []byte, initial_stage bo
 
 	err := s.writeLength(len(encMsgBuf))
 	if err != nil {
-		log.Error("xx_sendHandshakeMessage initiator=%v err=%s", s.initiator, err)
 		return fmt.Errorf("xx_sendHandshakeMessage write length err=%s", err)
 	}
 
 	_, err = s.insecure.Write(encMsgBuf)
 	if err != nil {
-		log.Error("xx_sendHandshakeMessage initiator=%v err=%s", s.initiator, err)
 		return fmt.Errorf("xx_sendHandshakeMessage write to conn err=%s", err)
 	}
 
@@ -66,7 +64,6 @@ func (s *secureSession) xx_recvHandshakeMessage(initial_stage bool) (buf []byte,
 
 	s.xx_ns, plaintext, valid = xx.RecvMessage(s.xx_ns, msgbuf)
 	if !valid {
-		log.Error("xx_recvHandshakeMessage initiator=%v err=validation fail", s.initiator)
 		return buf, nil, false, fmt.Errorf("xx_recvHandshakeMessage validation fail")
 	}
 
@@ -137,7 +134,6 @@ func (s *secureSession) runHandshake_xx(ctx context.Context, fallback bool, payl
 
 			s.xx_ns, plaintext, valid = xx.RecvMessage(s.xx_ns, msgbuf)
 			if !valid {
-				log.Errorf("xx_recvHandshakeMessage initiator=%v", s.initiator, "error", "validation fail")
 				return fmt.Errorf("runHandshake_xx validation fail")
 			}
 
@@ -160,22 +156,21 @@ func (s *secureSession) runHandshake_xx(ctx context.Context, fallback bool, payl
 		// set remote libp2p public key
 		err = s.setRemotePeerInfo(nhp.GetIdentityKey())
 		if err != nil {
-			log.Errorf("runHandshake_xx stage=2 initiator=true set remote peer info err=%s", err)
 			return fmt.Errorf("runHandshake_xx stage=2 initiator=true read remote libp2p key fail")
 		}
 
 		// assert that remote peer ID matches libp2p public key
 		pid, err := peer.IDFromPublicKey(s.RemotePublicKey())
 		if pid != s.remotePeer {
-			log.Errorf("runHandshake_xx stage=2 initiator=true check remote peer id err: expected %x got %x", s.remotePeer, pid)
+			return fmt.Errorf("runHandshake_xx stage=2 initiator=true check remote peer id err: expected %x got %x", s.remotePeer, pid)
 		} else if err != nil {
-			log.Errorf("runHandshake_xx stage 2 initiator check remote peer id err %s", err)
+			return fmt.Errorf("runHandshake_xx stage 2 initiator check remote peer id err %s", err)
 		}
 
 		// verify payload is signed by libp2p key
 		err = s.verifyPayload(nhp, s.xx_ns.RemoteKey())
 		if err != nil {
-			log.Errorf("runHandshake_xx stage=2 initiator=true verify payload err=%s", err)
+			return fmt.Errorf("runHandshake_xx stage=2 initiator=true verify payload err=%s", err)
 		}
 
 		if s.noisePipesSupport {
@@ -205,7 +200,6 @@ func (s *secureSession) runHandshake_xx(ctx context.Context, fallback bool, payl
 			var msgbuf *xx.MessageBuffer
 			msgbuf, err = xx.Decode0(initialMsg)
 			if err != nil {
-				log.Errorf("runHandshake_xx recv msg err", err)
 				return err
 			}
 
@@ -214,7 +208,6 @@ func (s *secureSession) runHandshake_xx(ctx context.Context, fallback bool, payl
 
 			s.xx_ns, plaintext, valid = xx.RecvMessage(s.xx_ns, &xx_msgbuf)
 			if !valid {
-				log.Errorf("runHandshake_xx initiator=false recv msg err=%s", "validation fail")
 				return fmt.Errorf("runHandshake_xx validation fail")
 			}
 		}
@@ -249,14 +242,13 @@ func (s *secureSession) runHandshake_xx(ctx context.Context, fallback bool, payl
 		// set remote libp2p public key
 		err = s.setRemotePeerInfo(nhp.GetIdentityKey())
 		if err != nil {
-			log.Errorf("runHandshake_xx stage=2 initiator=false set remote peer info err=%s", err)
 			return fmt.Errorf("runHandshake_xx stage=2 initiator=false read remote libp2p key fail")
 		}
 
-		// assert that remote peer ID matches libp2p key
+		// set remote libp2p public key from payload
 		err = s.setRemotePeerID(s.RemotePublicKey())
 		if err != nil {
-			log.Errorf("runHandshake_xx stage=2 initiator=false set remote peer id err=%s", err)
+			return fmt.Errorf("runHandshake_xx stage=2 initiator=false set remote peer id err=%s", err)
 		}
 
 		s.remote.noiseKey = s.xx_ns.RemoteKey()
@@ -264,7 +256,6 @@ func (s *secureSession) runHandshake_xx(ctx context.Context, fallback bool, payl
 		// verify payload is signed by libp2p key
 		err = s.verifyPayload(nhp, s.remote.noiseKey)
 		if err != nil {
-			log.Errorf("runHandshake_xx stage=2 initiator=false verify payload err=%s", err)
 			return fmt.Errorf("runHandshake_xx stage=2 initiator=false err=%s", err)
 		}
 

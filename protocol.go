@@ -170,7 +170,6 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 	noise_pub := s.noiseKeypair.publicKey
 	signedPayload, err := s.localKey.Sign(append([]byte(payload_string), noise_pub[:]...))
 	if err != nil {
-		log.Errorf("runHandshake signing payload err=%s", err)
 		return fmt.Errorf("runHandshake signing payload err=%s", err)
 	}
 
@@ -180,7 +179,6 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 	payload.IdentitySig = signedPayload
 	payloadEnc, err := proto.Marshal(payload)
 	if err != nil {
-		log.Errorf("runHandshake marshal payload err=%s", err)
 		return fmt.Errorf("runHandshake proto marshal payload err=%s", err)
 	}
 
@@ -195,12 +193,9 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 		// we're either a responder or an initiator with a known static key for the remote peer, try IK
 		buf, err := s.runHandshake_ik(ctx, payloadEnc)
 		if err != nil {
-			log.Error("runHandshake ik err=%s", err)
-
 			// IK failed, pipe to XXfallback
 			err = s.runHandshake_xx(ctx, true, payloadEnc, buf)
 			if err != nil {
-				log.Error("runHandshake xx err=err", err)
 				return fmt.Errorf("runHandshake xx err=%s", err)
 			}
 
@@ -212,7 +207,6 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 		// unknown static key for peer, try XX
 		err := s.runHandshake_xx(ctx, false, payloadEnc, nil)
 		if err != nil {
-			log.Error("runHandshake xx err=%s", err)
 			return err
 		}
 
@@ -262,13 +256,11 @@ func (s *secureSession) Read(buf []byte) (int, error) {
 		ciphertext := make([]byte, l)
 		_, err = io.ReadFull(s.insecure, ciphertext)
 		if err != nil {
-			log.Error("read ciphertext err", err)
 			return 0, err
 		}
 
 		plaintext, err := s.Decrypt(ciphertext)
 		if err != nil {
-			log.Error("decrypt err", err)
 			return 0, err
 		}
 
@@ -328,13 +320,11 @@ func (s *secureSession) Write(in []byte) (int, error) {
 	writeChunk := func(in []byte) (int, error) {
 		ciphertext, err := s.Encrypt(in)
 		if err != nil {
-			log.Error("encrypt error", err)
 			return 0, err
 		}
 
 		err = s.writeLength(len(ciphertext))
 		if err != nil {
-			log.Error("write length err: ", err)
 			return 0, err
 		}
 
