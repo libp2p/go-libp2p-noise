@@ -106,7 +106,7 @@ func ikReadMessageB(hs *handshakestate, message *MessageBuffer) ([32]byte, []byt
  * ---------------------------------------------------------------- */
 
 // Encodes a MessageBuffer from stage 0
-func (mb *MessageBuffer) IKEncode0() []byte {
+func IKEncode0(mb *MessageBuffer) []byte {
 	enc := []byte{}
 
 	enc = append(enc, mb.ne[:]...)
@@ -117,7 +117,7 @@ func (mb *MessageBuffer) IKEncode0() []byte {
 }
 
 // Encodes a MessageBuffer from stage 1
-func (mb *MessageBuffer) IKEncode1() []byte {
+func IKEncode1(mb *MessageBuffer) []byte {
 	enc := []byte{}
 
 	enc = append(enc, mb.ne[:]...)
@@ -170,7 +170,7 @@ func IKInitSession(initiator bool, prologue []byte, s Keypair, rs [32]byte) *Noi
 	return &session
 }
 
-func IKSendMessage(session *NoiseSession, message []byte) (*NoiseSession, MessageBuffer) {
+func IKSendMessage(session *NoiseSession, message []byte, _ *Keypair) (*NoiseSession, MessageBuffer) {
 	var messageBuffer MessageBuffer
 	if session.mc == 0 {
 		_, messageBuffer = ikWriteMessageA(&session.hs, message)

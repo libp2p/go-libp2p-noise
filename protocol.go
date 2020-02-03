@@ -155,6 +155,45 @@ func (s *secureSession) verifyPayload(payload *pb.NoiseHandshakePayload, noiseKe
 	return nil
 }
 
+func (s *secureSession) processRemoteHandshakePayload(plaintext []byte) error {
+	// unmarshal payload
+	nhp := new(pb.NoiseHandshakePayload)
+	err := proto.Unmarshal(plaintext, nhp)
+	if err != nil {
+		return fmt.Errorf("error unmarshaling remote handshake payload: %s", err)
+	}
+
+	// set remote libp2p public key
+	err = s.setRemotePeerInfo(nhp.GetIdentityKey())
+	if err != nil {
+		return fmt.Errorf("error processing remote identity key: %s", err)
+	}
+	s.remote.noiseKey = s.ns.RemoteKey()
+
+	pid, err := peer.IDFromPublicKey(s.RemotePublicKey())
+	if err != nil {
+		return fmt.Errorf("error getting remote peer id: %s", err)
+	}
+
+	if s.initiator {
+		if pid != s.remotePeer {
+			return fmt.Errorf("remote peer id mismatch: expected %s got %s", s.remotePeer.Pretty(), pid.Pretty())
+		}
+	} else {
+		err = s.setRemotePeerID(s.RemotePublicKey())
+		if err != nil {
+			return fmt.Errorf("error setting peer id from remote public key: %s", err)
+		}
+	}
+
+	// verify payload is signed by libp2p key
+	err = s.verifyPayload(nhp, s.ns.RemoteKey())
+	if err != nil {
+		return fmt.Errorf("error verifying handshake payload: %s", err)
+	}
+	return nil
+}
+
 func (s *secureSession) runHandshake(ctx context.Context) error {
 	// setup libp2p keys
 	localKeyRaw, err := s.LocalPublicKey().Bytes()
@@ -187,10 +226,10 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 	}
 	if tryIK {
 		// we're either a responder or an initiator with a known static key for the remote peer, try IK
-		buf, err := s.runHandshake_ik(ctx, payloadEnc)
+		buf, err := s.runIK(ctx, payloadEnc)
 		if err != nil {
 			// IK failed, pipe to XXfallback
-			err = s.runHandshake_xx(ctx, true, payloadEnc, buf)
+			err = s.runXXfallback(ctx, payloadEnc, buf)
 			if err != nil {
 				return fmt.Errorf("runHandshake xx err=%s", err)
 			}
@@ -201,7 +240,7 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 		}
 	} else {
 		// unknown static key for peer, try XX
-		err := s.runHandshake_xx(ctx, false, payloadEnc, nil)
+		err := s.runXX(ctx, payloadEnc)
 		if err != nil {
 			return err
 		}

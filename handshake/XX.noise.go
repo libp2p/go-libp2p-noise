@@ -127,7 +127,7 @@ func xxReadMessageC(hs *handshakestate, message *MessageBuffer) ([32]byte, []byt
  * ---------------------------------------------------------------- */
 
 // Encodes a MessageBuffer from stage 0
-func (mb *MessageBuffer) XXEncode0() []byte {
+func XXEncode0(mb *MessageBuffer) []byte {
 	enc := []byte{}
 
 	enc = append(enc, mb.ne[:]...)
@@ -137,7 +137,7 @@ func (mb *MessageBuffer) XXEncode0() []byte {
 }
 
 // Encodes a MessageBuffer from stage 1 and 2
-func (mb *MessageBuffer) XXEncode1() []byte {
+func XXEncode1(mb *MessageBuffer) []byte {
 	enc := []byte{}
 
 	enc = append(enc, mb.ne[:]...)

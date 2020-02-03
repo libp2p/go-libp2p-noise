@@ -66,7 +66,7 @@ func TestHandshake(t *testing.T) {
 	var msgbuf MessageBuffer
 	msg := []byte{}
 	msg = append(msg, payload_init_enc[:]...)
-	ns_init, msgbuf = IKSendMessage(ns_init, msg)
+	ns_init, msgbuf = IKSendMessage(ns_init, msg, nil)
 
 	t.Logf("stage 0 msgbuf: %v", msgbuf)
 	t.Logf("stage 0 msgbuf ne len: %d", len(msgbuf.NE()))
@@ -91,7 +91,7 @@ func TestHandshake(t *testing.T) {
 		t.Fatalf("proto marshal payload fail: %s", err)
 	}
 	msg = append(msg, payload_resp_enc[:]...)
-	ns_resp, msgbuf = IKSendMessage(ns_resp, msg)
+	ns_resp, msgbuf = IKSendMessage(ns_resp, msg, nil)
 
 	t.Logf("stage 1 msgbuf: %v", msgbuf)
 	t.Logf("stage 1 msgbuf ne len: %d", len(msgbuf.NE()))
