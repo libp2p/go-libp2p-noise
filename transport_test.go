@@ -144,6 +144,26 @@ func TestKeys(t *testing.T) {
 	}
 }
 
+func TestPeerIDMismatchFailsHandshake(t *testing.T) {
+	initTransport := newTestTransport(t, crypto.Ed25519, 2048)
+	respTransport := newTestTransport(t, crypto.Ed25519, 2048)
+	init, resp := newConnPair(t)
+
+	var initErr error
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, initErr = initTransport.SecureOutbound(context.TODO(), init, "a-random-peer-id")
+	}()
+
+	_, _ = respTransport.SecureInbound(context.TODO(), resp)
+	<-done
+
+	if initErr == nil {
+		t.Fatal("expected initiator to fail with peer ID mismatch error")
+	}
+}
+
 func makeLargePlaintext(size int) []byte {
 	buf := make([]byte, size)
 	rand.Read(buf)
