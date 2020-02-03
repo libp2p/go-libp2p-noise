@@ -20,8 +20,6 @@ func (s *secureSession) ik_sendHandshakeMessage(payload []byte, initial_stage bo
 		encMsgBuf = msgbuf.Encode1()
 	}
 
-	log.Debugf("ik_sendHandshakeMessage initiator=%v msgbuf=%v", s.initiator, msgbuf)
-
 	err := s.writeLength(len(encMsgBuf))
 	if err != nil {
 		return fmt.Errorf("ik_sendHandshakeMessage write length err=%s", err)
@@ -56,8 +54,6 @@ func (s *secureSession) ik_recvHandshakeMessage(initial_stage bool) (buf []byte,
 		msgbuf, err = ik.Decode1(buf)
 	}
 
-	log.Debugf("ik_recvHandshakeMessage initiator=%v msgbuf=%v", s.initiator, msgbuf)
-
 	if err != nil {
 		return buf, nil, false, fmt.Errorf("ik_recvHandshakeMessage decode msg fail: %s", err)
 	}
@@ -78,8 +74,6 @@ func (s *secureSession) ik_recvHandshakeMessage(initial_stage bool) (buf []byte,
 // returns last successful message upon error
 func (s *secureSession) runHandshake_ik(ctx context.Context, payload []byte) ([]byte, error) {
 	kp := ik.NewKeypair(s.noiseKeypair.publicKey, s.noiseKeypair.privateKey)
-
-	log.Debugf("runHandshake_ik initiator=%v pubkey=%x", kp.PubKey(), s.initiator)
 
 	remoteNoiseKey := s.noiseStaticKeyCache.Load(s.remotePeer)
 
@@ -181,7 +175,5 @@ func (s *secureSession) runHandshake_ik(ctx context.Context, payload []byte) ([]
 		}
 
 	}
-
-	log.Debugf("runHandshake_ik done initiator=%v", s.initiator)
 	return nil, nil
 }

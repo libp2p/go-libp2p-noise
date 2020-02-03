@@ -147,8 +147,6 @@ func (s *secureSession) verifyPayload(payload *pb.NoiseHandshakePayload, noiseKe
 	sig := payload.GetIdentitySig()
 	msg := append([]byte(payload_string), noiseKey[:]...)
 
-	log.Debugf("verifyPayload msg=%x", msg)
-
 	ok, err := s.RemotePublicKey().Verify(msg, sig)
 	if err != nil {
 		return err

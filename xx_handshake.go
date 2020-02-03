@@ -32,8 +32,6 @@ func (s *secureSession) xx_sendHandshakeMessage(payload []byte, initial_stage bo
 		return fmt.Errorf("xx_sendHandshakeMessage write to conn err=%s", err)
 	}
 
-	log.Debugf("xx_sendHandshakeMessage initiator=%v msgbuf=%v initial_stage=%v", s.initiator, msgbuf, initial_stage)
-
 	return nil
 }
 
@@ -58,7 +56,6 @@ func (s *secureSession) xx_recvHandshakeMessage(initial_stage bool) (buf []byte,
 	}
 
 	if err != nil {
-		log.Debugf("xx_recvHandshakeMessage initiator=%v decode err=%s", s.initiator, err)
 		return buf, nil, false, fmt.Errorf("xx_recvHandshakeMessage decode msg err=%s", err)
 	}
 
@@ -66,8 +63,6 @@ func (s *secureSession) xx_recvHandshakeMessage(initial_stage bool) (buf []byte,
 	if !valid {
 		return buf, nil, false, fmt.Errorf("xx_recvHandshakeMessage validation fail")
 	}
-
-	log.Debugf("xx_recvHandshakeMessage initiator=%v msgbuf=%v initial_stage=%v", s.initiator, msgbuf, initial_stage)
 
 	return buf, plaintext, valid, nil
 }
@@ -82,8 +77,6 @@ func (s *secureSession) xx_recvHandshakeMessage(initial_stage bool) (buf []byte,
 func (s *secureSession) runHandshake_xx(ctx context.Context, fallback bool, payload []byte, initialMsg []byte) (err error) {
 	kp := xx.NewKeypair(s.noiseKeypair.publicKey, s.noiseKeypair.privateKey)
 
-	log.Debugf("runHandshake_xx initiator=%v fallback=%v pubkey=%x", s.initiator, fallback, kp.PubKey())
-
 	// new XX noise session
 	s.xx_ns = xx.InitSession(s.initiator, s.prologue, kp, [32]byte{})
 
@@ -97,14 +90,10 @@ func (s *secureSession) runHandshake_xx(ctx context.Context, fallback bool, payl
 			}
 		} else {
 			e_ik := s.ik_ns.Ephemeral()
-			log.Debugf("runHandshake_xx stage=0 initiator=true fallback=true ephemeralkeys=%x", e_ik)
 			e_xx := xx.NewKeypair(e_ik.PubKey(), e_ik.PrivKey())
 
 			// initialize state as if we sent the first message
-			var msgbuf xx.MessageBuffer
-			s.xx_ns, msgbuf = xx.SendMessage(s.xx_ns, nil, &e_xx)
-
-			log.Debugf("runHandshake_xx stage=0 initiator=true fallback=true msgbuf=%v", msgbuf)
+			s.xx_ns, _ = xx.SendMessage(s.xx_ns, nil, &e_xx)
 		}
 
 		// stage 1 //
@@ -125,10 +114,7 @@ func (s *secureSession) runHandshake_xx(ctx context.Context, fallback bool, payl
 			var msgbuf *xx.MessageBuffer
 			msgbuf, err = xx.Decode1(initialMsg)
 
-			log.Debugf("xx_recvHandshakeMessage stage=1 initiator=%v msgbuf=%v", s.initiator, msgbuf)
-
 			if err != nil {
-				log.Debugf("xx_recvHandshakeMessage stage=1 initiator=%v decode_err=%s", s.initiator, err)
 				return fmt.Errorf("runHandshake_xx decode msg fail: %s", err)
 			}
 
@@ -204,8 +190,6 @@ func (s *secureSession) runHandshake_xx(ctx context.Context, fallback bool, payl
 			}
 
 			xx_msgbuf := xx.NewMessageBuffer(msgbuf.NE(), nil, nil)
-			log.Debugf("runHandshake_xx initiator=false msgbuf=%v modified_msgbuf=%v", msgbuf, xx_msgbuf)
-
 			s.xx_ns, plaintext, valid = xx.RecvMessage(s.xx_ns, &xx_msgbuf)
 			if !valid {
 				return fmt.Errorf("runHandshake_xx validation fail")
@@ -230,8 +214,6 @@ func (s *secureSession) runHandshake_xx(ctx context.Context, fallback bool, payl
 		if !valid {
 			return fmt.Errorf("runHandshake_xx stage=2 initiator=false err=validation fail")
 		}
-
-		log.Debugf("runHandshake_xx stage=2 initiator=false remote key=%x", s.xx_ns.RemoteKey())
 
 		// unmarshal payload
 		err = proto.Unmarshal(plaintext, nhp)
@@ -264,6 +246,5 @@ func (s *secureSession) runHandshake_xx(ctx context.Context, fallback bool, payl
 		}
 	}
 
-	log.Debugf("runHandshake_xx done initiator=%v", s.initiator)
 	return nil
 }
