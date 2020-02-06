@@ -7,6 +7,8 @@ import (
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/sec"
+
+	"github.com/libp2p/go-libp2p-noise/core"
 )
 
 // ID is the protocol ID for noise
@@ -21,7 +23,7 @@ type Transport struct {
 	privateKey          crypto.PrivKey
 	noisePipesSupport   bool
 	noiseStaticKeyCache *KeyCache
-	noiseKeypair        *Keypair
+	noiseKeypair        *core.Keypair
 }
 
 type transportConstructor func(crypto.PrivKey) (*Transport, error)
@@ -84,10 +86,8 @@ func New(privkey crypto.PrivKey, options ...Option) (*Transport, error) {
 
 	kp := cfg.noiseKeypair
 	if kp == nil {
-		kp, err = GenerateKeypair()
-		if err != nil {
-			return nil, err
-		}
+		keys := core.GenerateKeypair()
+		kp = &keys
 	}
 
 	// the static key cache is only useful if Noise Pipes is enabled

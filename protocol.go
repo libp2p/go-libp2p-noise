@@ -15,7 +15,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
 
-	"github.com/libp2p/go-libp2p-noise/handshake"
+	"github.com/libp2p/go-libp2p-noise/core"
 	"github.com/libp2p/go-libp2p-noise/pb"
 )
 
@@ -43,7 +43,7 @@ type secureSession struct {
 	local  peerInfo
 	remote peerInfo
 
-	ns *handshake.NoiseSession
+	ns *core.NoiseSession
 
 	xx_complete bool
 	ik_complete bool
@@ -51,7 +51,7 @@ type secureSession struct {
 	noisePipesSupport   bool
 	noiseStaticKeyCache *KeyCache
 
-	noiseKeypair *Keypair
+	noiseKeypair *core.Keypair
 
 	msgBuffer []byte
 	readLock  sync.Mutex
@@ -83,7 +83,7 @@ func newSecureSession(tpt *Transport, ctx context.Context, insecure net.Conn, re
 	}
 
 	localPeerInfo := peerInfo{
-		noiseKey:  tpt.noiseKeypair.publicKey,
+		noiseKey:  tpt.noiseKeypair.PubKey(),
 		libp2pKey: tpt.privateKey.GetPublic(),
 	}
 
@@ -111,11 +111,11 @@ func (s *secureSession) NoiseStaticKeyCache() *KeyCache {
 }
 
 func (s *secureSession) NoisePublicKey() [32]byte {
-	return s.noiseKeypair.publicKey
+	return s.noiseKeypair.PubKey()
 }
 
 func (s *secureSession) NoisePrivateKey() [32]byte {
-	return s.noiseKeypair.privateKey
+	return s.noiseKeypair.PrivKey()
 }
 
 func (s *secureSession) readLength() (int, error) {
@@ -202,7 +202,7 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 	}
 
 	// sign noise data for payload
-	noise_pub := s.noiseKeypair.publicKey
+	noise_pub := s.noiseKeypair.PubKey()
 	signedPayload, err := s.localKey.Sign(append([]byte(payload_string), noise_pub[:]...))
 	if err != nil {
 		return fmt.Errorf("runHandshake signing payload err=%s", err)

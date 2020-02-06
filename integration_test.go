@@ -9,6 +9,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/host"
 	net "github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-noise/core"
 	ma "github.com/multiformats/go-multiaddr"
 	"io"
 	"io/ioutil"
@@ -35,7 +36,7 @@ func generateKey(seed int64) (crypto.PrivKey, error) {
 	return priv, nil
 }
 
-func makeNode(t *testing.T, seed int64, port int, kp *Keypair) (host.Host, error) {
+func makeNode(t *testing.T, seed int64, port int, kp *core.Keypair) (host.Host, error) {
 	priv, err := generateKey(seed)
 	if err != nil {
 		t.Fatal(err)
@@ -62,7 +63,7 @@ func makeNode(t *testing.T, seed int64, port int, kp *Keypair) (host.Host, error
 	return libp2p.New(ctx, options...)
 }
 
-func makeNodePipes(t *testing.T, seed int64, port int, rpid peer.ID, rpubkey [32]byte, kp *Keypair) (host.Host, error) {
+func makeNodePipes(t *testing.T, seed int64, port int, rpid peer.ID, rpubkey [32]byte, kp *core.Keypair) (host.Host, error) {
 	priv, err := generateKey(seed)
 	if err != nil {
 		t.Fatal(err)
@@ -149,19 +150,16 @@ func TestLibp2pIntegration_NoPipes(t *testing.T) {
 func TestLibp2pIntegration_WithPipes(t *testing.T) {
 	ctx := context.Background()
 
-	kpa, err := GenerateKeypair()
-	if err != nil {
-		t.Fatal(err)
-	}
+	kpa := core.GenerateKeypair()
 
-	ha, err := makeNodePipes(t, 1, 33333, "", [32]byte{}, kpa)
+	ha, err := makeNodePipes(t, 1, 33333, "", [32]byte{}, &kpa)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	defer ha.Close()
 
-	hb, err := makeNodePipes(t, 2, 34343, ha.ID(), kpa.publicKey, nil)
+	hb, err := makeNodePipes(t, 2, 34343, ha.ID(), kpa.PubKey(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,19 +204,16 @@ func TestLibp2pIntegration_WithPipes(t *testing.T) {
 func TestLibp2pIntegration_XXFallback(t *testing.T) {
 	ctx := context.Background()
 
-	kpa, err := GenerateKeypair()
-	if err != nil {
-		t.Fatal(err)
-	}
+	kpa := core.GenerateKeypair()
 
-	ha, err := makeNode(t, 1, 33333, kpa)
+	ha, err := makeNode(t, 1, 33333, &kpa)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	defer ha.Close()
 
-	hb, err := makeNodePipes(t, 2, 34343, ha.ID(), kpa.publicKey, nil)
+	hb, err := makeNodePipes(t, 2, 34343, ha.ID(), kpa.PubKey(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -261,15 +256,12 @@ func TestLibp2pIntegration_XXFallback(t *testing.T) {
 }
 
 func TestConstrucingWithMaker(t *testing.T) {
-	kp, err := GenerateKeypair()
-	if err != nil {
-		t.Fatal(err)
-	}
+	kp := core.GenerateKeypair()
 
 	ctx := context.Background()
 	h, err := libp2p.New(ctx,
 		libp2p.Security(ID,
-			Maker(NoiseKeyPair(kp), UseNoisePipes)))
+			Maker(NoiseKeyPair(&kp), UseNoisePipes)))
 
 	if err != nil {
 		t.Fatalf("unable to create libp2p host with Maker: %v", err)

@@ -1,5 +1,7 @@
 package noise
 
+import "github.com/libp2p/go-libp2p-noise/core"
+
 // UseNoisePipes configures the Noise transport to use the Noise Pipes pattern.
 // Noise Pipes attempts to use the more efficient IK handshake pattern when
 // dialing a remote peer, if that peer's static Noise key is known. If this
@@ -22,14 +24,14 @@ func UseNoisePipes(cfg *config) {
 //
 // If you do use this option with a key that's been saved to disk, you must
 // take care to store the key securely!
-func NoiseKeyPair(kp *Keypair) Option {
+func NoiseKeyPair(kp *core.Keypair) Option {
 	return func(cfg *config) {
 		cfg.noiseKeypair = kp
 	}
 }
 
 type config struct {
-	noiseKeypair      *Keypair
+	noiseKeypair      *core.Keypair
 	noisePipesSupport bool
 }
 

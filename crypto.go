@@ -2,7 +2,7 @@ package noise
 
 import (
 	"errors"
-	"github.com/libp2p/go-libp2p-noise/handshake"
+	"github.com/libp2p/go-libp2p-noise/core"
 )
 
 func (s *secureSession) Encrypt(plaintext []byte) (ciphertext []byte, err error) {
@@ -12,10 +12,10 @@ func (s *secureSession) Encrypt(plaintext []byte) (ciphertext []byte, err error)
 
 	if s.initiator {
 		cs := s.ns.CS1()
-		_, ciphertext = handshake.EncryptWithAd(cs, nil, plaintext)
+		_, ciphertext = core.EncryptWithAd(cs, nil, plaintext)
 	} else {
 		cs := s.ns.CS2()
-		_, ciphertext = handshake.EncryptWithAd(cs, nil, plaintext)
+		_, ciphertext = core.EncryptWithAd(cs, nil, plaintext)
 	}
 
 	return ciphertext, nil
@@ -29,10 +29,10 @@ func (s *secureSession) Decrypt(ciphertext []byte) (plaintext []byte, err error)
 	var ok bool
 	if s.initiator {
 		cs := s.ns.CS2()
-		_, plaintext, ok = handshake.DecryptWithAd(cs, nil, ciphertext)
+		_, plaintext, ok = core.DecryptWithAd(cs, nil, ciphertext)
 	} else {
 		cs := s.ns.CS1()
-		_, plaintext, ok = handshake.DecryptWithAd(cs, nil, ciphertext)
+		_, plaintext, ok = core.DecryptWithAd(cs, nil, ciphertext)
 	}
 
 	if !ok {

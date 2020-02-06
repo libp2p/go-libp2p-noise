@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/libp2p/go-libp2p-noise/handshake"
+	"github.com/libp2p/go-libp2p-noise/core"
 )
 
-type msgDecoder func([]byte) (*handshake.MessageBuffer, error)
-type msgReceiver func(session *handshake.NoiseSession, buffer *handshake.MessageBuffer) (*handshake.NoiseSession, []byte, bool)
-type msgEncoder func(buffer *handshake.MessageBuffer) []byte
-type msgSender func(session *handshake.NoiseSession, payload []byte, ephemeral *handshake.Keypair) (*handshake.NoiseSession, handshake.MessageBuffer)
+type msgDecoder func([]byte) (*core.MessageBuffer, error)
+type msgReceiver func(session *core.NoiseSession, buffer *core.MessageBuffer) (*core.NoiseSession, []byte, bool)
+type msgEncoder func(buffer *core.MessageBuffer) []byte
+type msgSender func(session *core.NoiseSession, payload []byte, ephemeral *core.Keypair) (*core.NoiseSession, core.MessageBuffer)
 
 func (s *secureSession) recvHandshakeMessage(decoder msgDecoder, receiver msgReceiver) (encrypted []byte, plaintext []byte, err error) {
 	l, err := s.readLength()
@@ -26,7 +26,7 @@ func (s *secureSession) recvHandshakeMessage(decoder msgDecoder, receiver msgRec
 		return buf, nil, err
 	}
 
-	var msgbuf *handshake.MessageBuffer
+	var msgbuf *core.MessageBuffer
 	msgbuf, err = decoder(buf)
 	if err != nil {
 		return buf, nil, err
@@ -41,7 +41,7 @@ func (s *secureSession) recvHandshakeMessage(decoder msgDecoder, receiver msgRec
 }
 
 func (s *secureSession) sendHandshakeMessage(payload []byte, encoder msgEncoder, sender msgSender) error {
-	var msgbuf handshake.MessageBuffer
+	var msgbuf core.MessageBuffer
 	s.ns, msgbuf = sender(s.ns, payload, nil)
 	encMsgBuf := encoder(&msgbuf)
 
@@ -60,16 +60,16 @@ func (s *secureSession) sendHandshakeMessage(payload []byte, encoder msgEncoder,
 
 func (s *secureSession) xxRecvHandshakeMessage(stageZero bool) (encrypted []byte, plaintext []byte, err error) {
 	if stageZero {
-		return s.recvHandshakeMessage(handshake.XXDecode0, handshake.XXRecvMessage)
+		return s.recvHandshakeMessage(core.XXDecode0, core.XXRecvMessage)
 	}
-	return s.recvHandshakeMessage(handshake.XXDecode1, handshake.XXRecvMessage)
+	return s.recvHandshakeMessage(core.XXDecode1, core.XXRecvMessage)
 }
 
 func (s *secureSession) xxSendHandshakeMessage(payload []byte, initial_stage bool) error {
 	if initial_stage {
-		return s.sendHandshakeMessage(payload, handshake.XXEncode0, handshake.XXSendMessage)
+		return s.sendHandshakeMessage(payload, core.XXEncode0, core.XXSendMessage)
 	}
-	return s.sendHandshakeMessage(payload, handshake.XXEncode1, handshake.XXSendMessage)
+	return s.sendHandshakeMessage(payload, core.XXEncode1, core.XXSendMessage)
 }
 
 func (s *secureSession) runXXAsInitiator(ctx context.Context, payload []byte) error {
@@ -109,13 +109,13 @@ func (s *secureSession) runXXfallbackAsInitiator(ctx context.Context, payload []
 
 	// get ephemeral key from previous IK NoiseSession
 	e_ik := s.ns.Ephemeral()
-	e_xx := handshake.NewKeypair(e_ik.PubKey(), e_ik.PrivKey())
+	e_xx := core.NewKeypair(e_ik.PubKey(), e_ik.PrivKey())
 
 	// initialize state as if we sent the first message
-	s.ns, _ = handshake.XXSendMessage(s.ns, nil, &e_xx)
+	s.ns, _ = core.XXSendMessage(s.ns, nil, &e_xx)
 
 	// stage 1
-	msgbuf, err := handshake.XXDecode1(ikMsg)
+	msgbuf, err := core.XXDecode1(ikMsg)
 
 	if err != nil {
 		return fmt.Errorf("failed to decode handshake message: %s", err)
@@ -123,7 +123,7 @@ func (s *secureSession) runXXfallbackAsInitiator(ctx context.Context, payload []
 
 	var plaintext []byte
 	var valid bool
-	s.ns, plaintext, valid = handshake.XXRecvMessage(s.ns, msgbuf)
+	s.ns, plaintext, valid = core.XXRecvMessage(s.ns, msgbuf)
 	if !valid {
 		return fmt.Errorf("handshake message invalid")
 	}
@@ -181,15 +181,15 @@ func (s *secureSession) runXXAsResponder(ctx context.Context, payload []byte) er
 func (s *secureSession) runXXfallbackAsResponder(ctx context.Context, payload []byte, ikMsg []byte) error {
 	// stage zero
 	// decode IK message as if it were stage zero XX message
-	msgbuf, err := handshake.XXDecode0(ikMsg)
+	msgbuf, err := core.XXDecode0(ikMsg)
 	if err != nil {
 		return err
 	}
 
 	// "receive" the message, updating the noise session handshake state
-	xx_msgbuf := handshake.NewMessageBuffer(msgbuf.NE(), nil, nil)
+	xx_msgbuf := core.NewMessageBuffer(msgbuf.NE(), nil, nil)
 	var valid bool
-	s.ns, _, valid = handshake.XXRecvMessage(s.ns, &xx_msgbuf)
+	s.ns, _, valid = core.XXRecvMessage(s.ns, &xx_msgbuf)
 	if !valid {
 		return fmt.Errorf("runHandshake_xx validation fail")
 	}
@@ -225,10 +225,8 @@ func (s *secureSession) runXXfallbackAsResponder(ctx context.Context, payload []
 //   <- e, ee, s, es
 //   -> s, se
 func (s *secureSession) runXX(ctx context.Context, payload []byte) (err error) {
-	kp := handshake.NewKeypair(s.noiseKeypair.publicKey, s.noiseKeypair.privateKey)
-
 	// new XX noise session
-	s.ns = handshake.XXInitSession(s.initiator, s.prologue, kp, [32]byte{})
+	s.ns = core.XXInitSession(s.initiator, s.prologue, *s.noiseKeypair, [32]byte{})
 
 	if s.initiator {
 		return s.runXXAsInitiator(ctx, payload)
@@ -237,9 +235,8 @@ func (s *secureSession) runXX(ctx context.Context, payload []byte) (err error) {
 }
 
 func (s *secureSession) runXXfallback(ctx context.Context, payload []byte, initialMsg []byte) (err error) {
-	kp := handshake.NewKeypair(s.noiseKeypair.publicKey, s.noiseKeypair.privateKey)
 	// new XX noise session
-	s.ns = handshake.XXInitSession(s.initiator, s.prologue, kp, [32]byte{})
+	s.ns = core.XXInitSession(s.initiator, s.prologue, *s.noiseKeypair, [32]byte{})
 
 	if s.initiator {
 		return s.runXXfallbackAsInitiator(ctx, payload, initialMsg)

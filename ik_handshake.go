@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/gogo/protobuf/proto"
 	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-noise/handshake"
+	"github.com/libp2p/go-libp2p-noise/core"
 	"github.com/libp2p/go-libp2p-noise/pb"
 )
 
@@ -16,11 +16,10 @@ import (
 //     <- e, ee, se
 // returns last successful message upon error
 func (s *secureSession) runIK(ctx context.Context, payload []byte) ([]byte, error) {
-	kp := handshake.NewKeypair(s.noiseKeypair.publicKey, s.noiseKeypair.privateKey)
 	remoteNoiseKey := s.noiseStaticKeyCache.Load(s.remotePeer)
 
 	// new IK noise session
-	s.ns = handshake.IKInitSession(s.initiator, s.prologue, kp, remoteNoiseKey)
+	s.ns = core.IKInitSession(s.initiator, s.prologue, *s.noiseKeypair, remoteNoiseKey)
 
 	if s.initiator {
 		return s.runIKAsInitiator(ctx, payload)
@@ -30,16 +29,16 @@ func (s *secureSession) runIK(ctx context.Context, payload []byte) ([]byte, erro
 
 func (s *secureSession) ikSendHandshakeMessage(payload []byte, initial_stage bool) error {
 	if initial_stage {
-		return s.sendHandshakeMessage(payload, handshake.IKEncode0, handshake.IKSendMessage)
+		return s.sendHandshakeMessage(payload, core.IKEncode0, core.IKSendMessage)
 	}
-	return s.sendHandshakeMessage(payload, handshake.IKEncode1, handshake.IKSendMessage)
+	return s.sendHandshakeMessage(payload, core.IKEncode1, core.IKSendMessage)
 }
 
 func (s *secureSession) ikRecvHandshakeMessage(initial_stage bool) (buf []byte, plaintext []byte, err error) {
 	if initial_stage {
-		return s.recvHandshakeMessage(handshake.IKDecode0, handshake.IKRecvMessage)
+		return s.recvHandshakeMessage(core.IKDecode0, core.IKRecvMessage)
 	}
-	return s.recvHandshakeMessage(handshake.IKDecode1, handshake.IKRecvMessage)
+	return s.recvHandshakeMessage(core.IKDecode1, core.IKRecvMessage)
 }
 
 func (s *secureSession) runIKAsInitiator(ctx context.Context, payload []byte) ([]byte, error) {

@@ -176,12 +176,12 @@ func dh(private_key [32]byte, public_key [32]byte) [32]byte {
 }
 
 func GenerateKeypair() Keypair {
-	var public_key [32]byte
-	var private_key [32]byte
-	_, _ = rand.Read(private_key[:])
-	curve25519.ScalarBaseMult(&public_key, &private_key)
-	if validatePublicKey(public_key[:]) {
-		return Keypair{public_key, private_key}
+	var publicKey [32]byte
+	var privateKey [32]byte
+	_, _ = rand.Read(privateKey[:])
+	curve25519.ScalarBaseMult(&publicKey, &privateKey)
+	if validatePublicKey(publicKey[:]) {
+		return Keypair{publicKey, privateKey}
 	}
 	return GenerateKeypair()
 }

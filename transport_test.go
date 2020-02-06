@@ -11,6 +11,8 @@ import (
 	crypto "github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/sec"
+
+	"github.com/libp2p/go-libp2p-noise/core"
 )
 
 func newTestTransport(t *testing.T, typ, bits int) *Transport {
@@ -22,14 +24,12 @@ func newTestTransport(t *testing.T, typ, bits int) *Transport {
 	if err != nil {
 		t.Fatal(err)
 	}
-	kp, err := GenerateKeypair()
-	if err != nil {
-		t.Fatal(err)
-	}
+	kp := core.GenerateKeypair()
+
 	return &Transport{
 		localID:      id,
 		privateKey:   priv,
-		noiseKeypair: kp,
+		noiseKeypair: &kp,
 	}
 }
 
@@ -243,7 +243,7 @@ func TestHandshakeIK(t *testing.T) {
 
 	// add responder's static key to initiator's key cache
 	keycache := NewKeyCache()
-	keycache.Store(respTransport.localID, respTransport.noiseKeypair.publicKey)
+	keycache.Store(respTransport.localID, respTransport.noiseKeypair.PubKey())
 	initTransport.noiseStaticKeyCache = keycache
 
 	// do IK handshake
