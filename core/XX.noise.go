@@ -11,7 +11,7 @@ XX:
  * PARAMETERS                                                       *
  * ---------------------------------------------------------------- */
 
-package handshake
+package core
 
 import "errors"
 

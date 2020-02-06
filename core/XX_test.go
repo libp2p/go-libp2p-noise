@@ -1,4 +1,4 @@
-package handshake
+package core
 
 import (
 	"crypto/rand"

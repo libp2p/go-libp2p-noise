@@ -12,7 +12,7 @@ IK:
  * PARAMETERS                                                       *
  * ---------------------------------------------------------------- */
 
-package handshake
+package core
 
 import "errors"
 
