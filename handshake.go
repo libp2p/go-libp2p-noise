@@ -11,7 +11,7 @@ import (
 
 func (s *secureSession) verifyPayload(payload *pb.NoiseHandshakePayload, noiseKey [32]byte) (err error) {
 	sig := payload.GetIdentitySig()
-	msg := append([]byte(payload_string), noiseKey[:]...)
+	msg := append([]byte(payloadSigningPrefix), noiseKey[:]...)
 
 	ok, err := s.RemotePublicKey().Verify(msg, sig)
 	if err != nil {
@@ -81,7 +81,7 @@ func (s *secureSession) makeHandshakePayload() ([]byte, error) {
 
 	// sign noise data for payload
 	noisePub := s.noiseKeypair.PubKey()
-	sig, err := s.localKey.Sign(append([]byte(payload_string), noisePub[:]...))
+	sig, err := s.localKey.Sign(append([]byte(payloadSigningPrefix), noisePub[:]...))
 	if err != nil {
 		return nil, fmt.Errorf("error signing handshake payload: %s", err)
 	}
