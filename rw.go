@@ -2,20 +2,38 @@ package noise
 
 import (
 	"encoding/binary"
+	"fmt"
 	"io"
 )
 
-func (s *secureSession) readLength() (int, error) {
+func (s *secureSession) writeMsgInsecure(data []byte) error {
+	// TODO: throw if len(data) > max_uint16
 	buf := make([]byte, 2)
-	_, err := io.ReadFull(s.insecure, buf)
-	return int(binary.BigEndian.Uint16(buf)), err
+	binary.BigEndian.PutUint16(buf, uint16(len(data)))
+	_, err := s.insecure.Write(buf)
+	if err != nil {
+		return fmt.Errorf("error writing message length: %s", err)
+	}
+	_, err = s.insecure.Write(data)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
-func (s *secureSession) writeLength(length int) error {
+func (s *secureSession) readMsgInsecure() ([]byte, error) {
 	buf := make([]byte, 2)
-	binary.BigEndian.PutUint16(buf, uint16(length))
-	_, err := s.insecure.Write(buf)
-	return err
+	_, err := io.ReadFull(s.insecure, buf)
+	if err != nil {
+		return nil, fmt.Errorf("error reading message length: %s", err)
+	}
+	size := int(binary.BigEndian.Uint16(buf))
+	buf = make([]byte, size)
+	_, err = io.ReadFull(s.insecure, buf)
+	if err != nil {
+		return nil, err
+	}
+	return buf, nil
 }
 
 func (s *secureSession) readSecure(buf []byte) (int, error) {
@@ -32,15 +50,8 @@ func (s *secureSession) readSecure(buf []byte) (int, error) {
 	}
 
 	readChunk := func(buf []byte) (int, error) {
-		// read length of encrypted message
-		l, err := s.readLength()
-		if err != nil {
-			return 0, err
-		}
-
 		// read and decrypt ciphertext
-		ciphertext := make([]byte, l)
-		_, err = io.ReadFull(s.insecure, ciphertext)
+		ciphertext, err := s.readMsgInsecure()
 		if err != nil {
 			return 0, err
 		}
@@ -85,13 +96,12 @@ func (s *secureSession) writeSecure(in []byte) (int, error) {
 			return 0, err
 		}
 
-		err = s.writeLength(len(ciphertext))
+		err = s.writeMsgInsecure(ciphertext)
 		if err != nil {
 			return 0, err
 		}
 
-		_, err = s.insecure.Write(ciphertext)
-		return len(in), err
+		return len(in), nil
 	}
 
 	written := 0

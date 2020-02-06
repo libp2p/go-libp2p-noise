@@ -3,7 +3,6 @@ package noise
 import (
 	"context"
 	"fmt"
-	"io"
 
 	"github.com/libp2p/go-libp2p-noise/core"
 )
@@ -14,14 +13,7 @@ type msgEncoder func(buffer *core.MessageBuffer) []byte
 type msgSender func(session *core.NoiseSession, payload []byte, ephemeral *core.Keypair) (*core.NoiseSession, core.MessageBuffer)
 
 func (s *secureSession) recvHandshakeMessage(decoder msgDecoder, receiver msgReceiver) (encrypted []byte, plaintext []byte, err error) {
-	l, err := s.readLength()
-	if err != nil {
-		return nil, nil, fmt.Errorf("xxRecvHandshakeMessage read length err=%s", err)
-	}
-
-	buf := make([]byte, l)
-
-	_, err = io.ReadFull(s.insecure, buf)
+	buf, err := s.readMsgInsecure()
 	if err != nil {
 		return buf, nil, err
 	}
@@ -45,17 +37,7 @@ func (s *secureSession) sendHandshakeMessage(payload []byte, encoder msgEncoder,
 	s.ns, msgbuf = sender(s.ns, payload, nil)
 	encMsgBuf := encoder(&msgbuf)
 
-	err := s.writeLength(len(encMsgBuf))
-	if err != nil {
-		return fmt.Errorf("xxSendHandshakeMessage write length err=%s", err)
-	}
-
-	_, err = s.insecure.Write(encMsgBuf)
-	if err != nil {
-		return fmt.Errorf("xxSendHandshakeMessage write to conn err=%s", err)
-	}
-
-	return nil
+	return s.writeMsgInsecure(encMsgBuf)
 }
 
 func (s *secureSession) xxRecvHandshakeMessage(stageZero bool) (encrypted []byte, plaintext []byte, err error) {
