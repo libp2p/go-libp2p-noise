@@ -102,7 +102,6 @@ func newSecureSession(tpt *Transport, ctx context.Context, insecure net.Conn, re
 	}
 
 	err := s.runHandshake(ctx)
-
 	return s, err
 }
 
@@ -194,27 +193,35 @@ func (s *secureSession) processRemoteHandshakePayload(plaintext []byte) error {
 	return nil
 }
 
-func (s *secureSession) runHandshake(ctx context.Context) error {
+func (s *secureSession) makeHandshakePayload() ([]byte, error) {
 	// setup libp2p keys
-	localKeyRaw, err := s.LocalPublicKey().Bytes()
+	identityKeyBytes, err := crypto.MarshalPublicKey(s.LocalPublicKey())
 	if err != nil {
-		return fmt.Errorf("runHandshake err getting raw pubkey: %s", err)
+		return nil, fmt.Errorf("error marshaling libp2p identity key: %s", err)
 	}
 
 	// sign noise data for payload
-	noise_pub := s.noiseKeypair.PubKey()
-	signedPayload, err := s.localKey.Sign(append([]byte(payload_string), noise_pub[:]...))
+	noisePub := s.noiseKeypair.PubKey()
+	sig, err := s.localKey.Sign(append([]byte(payload_string), noisePub[:]...))
 	if err != nil {
-		return fmt.Errorf("runHandshake signing payload err=%s", err)
+		return nil, fmt.Errorf("error signing handshake payload: %s", err)
 	}
 
 	// create payload
 	payload := new(pb.NoiseHandshakePayload)
-	payload.IdentityKey = localKeyRaw
-	payload.IdentitySig = signedPayload
+	payload.IdentityKey = identityKeyBytes
+	payload.IdentitySig = sig
 	payloadEnc, err := proto.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("runHandshake proto marshal payload err=%s", err)
+		return nil, fmt.Errorf("error marshaling handshake payload: %s", err)
+	}
+	return payloadEnc, nil
+}
+
+func (s *secureSession) runHandshake(ctx context.Context) error {
+	payloadEnc, err := s.makeHandshakePayload()
+	if err != nil {
+		return fmt.Errorf("error creating noise handshake payload: %s", err)
 	}
 
 	// If we support Noise pipes, we try IK first, falling back to XX if IK fails.
@@ -227,27 +234,28 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 	if tryIK {
 		// we're either a responder or an initiator with a known static key for the remote peer, try IK
 		buf, err := s.runIK(ctx, payloadEnc)
-		if err != nil {
-			// IK failed, pipe to XXfallback
-			err = s.runXXfallback(ctx, payloadEnc, buf)
-			if err != nil {
-				return fmt.Errorf("runHandshake xx err=%s", err)
-			}
-
-			s.xx_complete = true
-		} else {
+		if err == nil {
 			s.ik_complete = true
+			return nil
 		}
-	} else {
-		// unknown static key for peer, try XX
-		err := s.runXX(ctx, payloadEnc)
+
+		log.Debugf("IK handshake failed, trying XXfallback. IK err: %s", err)
+		// IK failed, pipe to XXfallback
+		err = s.runXXfallback(ctx, payloadEnc, buf)
 		if err != nil {
 			return err
 		}
-
 		s.xx_complete = true
+		return nil
 	}
 
+	// If we don't support Noise pipes, or don't have a cached static key, run normal XX
+	err = s.runXX(ctx, payloadEnc)
+	if err != nil {
+		return err
+	}
+
+	s.xx_complete = true
 	return nil
 }
 
