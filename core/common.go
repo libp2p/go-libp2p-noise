@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/binary"
+	"errors"
 	"golang.org/x/crypto/chacha20poly1305"
 	"golang.org/x/crypto/curve25519"
 	"golang.org/x/crypto/hkdf"
@@ -86,6 +87,31 @@ func (kp Keypair) PrivKey() [32]byte {
 
 func (ns *NoiseSession) RemoteKey() [32]byte {
 	return ns.hs.rs
+}
+
+func (ns *NoiseSession) Encrypt(plaintext []byte) []byte {
+	var cs *cipherstate
+	if ns.i {
+		cs = ns.CS1()
+	} else {
+		cs = ns.CS2()
+	}
+	_, ciphertext := EncryptWithAd(cs, nil, plaintext)
+	return ciphertext
+}
+
+func (ns *NoiseSession) Decrypt(ciphertext []byte) ([]byte, error) {
+	var cs *cipherstate
+	if ns.i {
+		cs = ns.CS2()
+	} else {
+		cs = ns.CS1()
+	}
+	_, plaintext, valid := DecryptWithAd(cs, nil, ciphertext)
+	if !valid {
+		return nil, errors.New("decryption failed: authentication data invalid")
+	}
+	return plaintext, nil
 }
 
 func NewMessageBuffer(ne [32]byte, ns []byte, ciphertext []byte) MessageBuffer {

@@ -7,39 +7,6 @@ import (
 	"github.com/libp2p/go-libp2p-noise/core"
 )
 
-type msgDecoder func([]byte) (*core.MessageBuffer, error)
-type msgReceiver func(session *core.NoiseSession, buffer *core.MessageBuffer) (*core.NoiseSession, []byte, bool)
-type msgEncoder func(buffer *core.MessageBuffer) []byte
-type msgSender func(session *core.NoiseSession, payload []byte, ephemeral *core.Keypair) (*core.NoiseSession, core.MessageBuffer)
-
-func (s *secureSession) recvHandshakeMessage(decoder msgDecoder, receiver msgReceiver) (encrypted []byte, plaintext []byte, err error) {
-	buf, err := s.readMsgInsecure()
-	if err != nil {
-		return buf, nil, err
-	}
-
-	var msgbuf *core.MessageBuffer
-	msgbuf, err = decoder(buf)
-	if err != nil {
-		return buf, nil, err
-	}
-	var valid bool
-	s.ns, plaintext, valid = receiver(s.ns, msgbuf)
-	if !valid {
-		return buf, nil, fmt.Errorf("handshake message invalid")
-	}
-
-	return buf, plaintext, nil
-}
-
-func (s *secureSession) sendHandshakeMessage(payload []byte, encoder msgEncoder, sender msgSender) error {
-	var msgbuf core.MessageBuffer
-	s.ns, msgbuf = sender(s.ns, payload, nil)
-	encMsgBuf := encoder(&msgbuf)
-
-	return s.writeMsgInsecure(encMsgBuf)
-}
-
 func (s *secureSession) xxRecvHandshakeMessage(stageZero bool) (encrypted []byte, plaintext []byte, err error) {
 	if stageZero {
 		return s.recvHandshakeMessage(core.XXDecode0, core.XXRecvMessage)
