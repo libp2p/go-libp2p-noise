@@ -120,7 +120,7 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 
 		log.Debugf("IK handshake failed, trying XXfallback. IK err: %s", err)
 		// IK failed, pipe to XXfallback
-		err = s.runXXfallback(ctx, payloadEnc, buf)
+		err = s.runXXfallback(ctx, payloadEnc, buf, s.ns.Ephemeral())
 		if err != nil {
 			return err
 		}

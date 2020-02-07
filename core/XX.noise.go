@@ -213,6 +213,54 @@ func XXInitSession(initiator bool, prologue []byte, s Keypair, rs [32]byte) *Noi
 	return &session
 }
 
+func XXfallbackInitSession(initiator bool, prologue []byte, s Keypair, rs [32]byte, ikMsg []byte, ikEphemeral *Keypair) (*NoiseSession, []byte, error) {
+	var session NoiseSession
+	psk := emptyKey
+	if initiator {
+		session.hs = xxInitializeInitiator(prologue, s, rs, psk)
+	} else {
+		session.hs = xxInitializeResponder(prologue, s, rs, psk)
+	}
+	session.i = initiator
+	session.codec = xxCodec{}
+
+	var plaintext []byte
+	if initiator {
+		// initialize XXfallback state as if we sent stage 0 message,
+		// using ephemeral key from failed IK session
+		xxWriteMessageA(&session.hs, nil, ikEphemeral)
+
+		// decode response as stage 1 XX message and incorporate into
+		// handshake state
+		msgbuf, err := session.codec.Decode1(ikMsg)
+		if err != nil {
+			return nil, nil, err
+		}
+		var valid bool
+		_, plaintext, valid = xxReadMessageB(&session.hs, msgbuf)
+		if !valid {
+			return nil, plaintext, errors.New("unable to initialize XXfallback - invalid stage 1 message")
+		}
+		session.mc = 2
+	} else {
+		// decode message as stage 0 XX message and incorporate into
+		// handshake state
+		msgbuf, err := session.codec.Decode0(ikMsg)
+		if err != nil {
+			return nil, nil, err
+		}
+		xxMsgbuf := NewMessageBuffer(msgbuf.NE(), nil, nil)
+		var valid bool
+		_, plaintext, valid = xxReadMessageA(&session.hs, &xxMsgbuf)
+		if !valid {
+			return nil, nil, errors.New("unable to initialize XXfallback - invalid stage 0 message")
+		}
+		session.mc = 1
+	}
+
+	return &session, plaintext, nil
+}
+
 func XXSendMessage(session *NoiseSession, message []byte, ephemeral *Keypair) (*NoiseSession, MessageBuffer) {
 	var messageBuffer MessageBuffer
 	if session.mc == 0 {

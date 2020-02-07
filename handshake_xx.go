@@ -39,46 +39,6 @@ func (s *secureSession) runXXAsInitiator(ctx context.Context, payload []byte) er
 	return nil
 }
 
-func (s *secureSession) runXXfallbackAsInitiator(ctx context.Context, payload []byte, ikMsg []byte, ikEphemeral *core.Keypair) error {
-	// stage 0
-
-	// get ephemeral key from previous IK NoiseSession
-	e_xx := core.NewKeypair(ikEphemeral.PubKey(), ikEphemeral.PrivKey())
-
-	// initialize state as if we sent the first message
-	s.ns, _ = core.XXSendMessage(s.ns, nil, &e_xx)
-
-	// stage 1
-	msgbuf, err := core.XXDecode1(ikMsg)
-
-	if err != nil {
-		return fmt.Errorf("failed to decode handshake message: %s", err)
-	}
-
-	var plaintext []byte
-	var valid bool
-	s.ns, plaintext, valid = core.XXRecvMessage(s.ns, msgbuf)
-	if !valid {
-		return fmt.Errorf("handshake message invalid")
-	}
-
-	err = s.processRemoteHandshakePayload(plaintext)
-	if err != nil {
-		return fmt.Errorf("error processing remote handshake payload: %s", err)
-	}
-
-	// stage 2 //
-	err = s.sendHandshakeMessage(payload)
-	if err != nil {
-		return fmt.Errorf("error sending handshake message: %s", err)
-	}
-
-	if s.noisePipesSupport {
-		s.noiseStaticKeyCache.Store(s.remotePeer, s.ns.RemoteKey())
-	}
-	return nil
-}
-
 func (s *secureSession) runXXAsResponder(ctx context.Context, payload []byte) error {
 	// stage 0
 	// read message
@@ -112,24 +72,36 @@ func (s *secureSession) runXXAsResponder(ctx context.Context, payload []byte) er
 	return nil
 }
 
-func (s *secureSession) runXXfallbackAsResponder(ctx context.Context, payload []byte, ikMsg []byte) error {
-	// stage zero
-	// decode IK message as if it were stage zero XX message
-	msgbuf, err := core.XXDecode0(ikMsg)
+func (s *secureSession) runXXfallbackAsInitiator(ctx context.Context, payload []byte, remotePayload []byte) error {
+	// stage 0 of the regular XX flow is skipped when running XXfallback as the initiator,
+	// as our previously sent stage 0 IK message will be used as the stage 0 XX message
+
+	// the responder's stage 1 message is read when initializing
+	// the XXfallback session, and is passed in via the remotePayload arg
+
+	err := s.processRemoteHandshakePayload(remotePayload)
 	if err != nil {
-		return err
+		return fmt.Errorf("error processing remote handshake payload: %s", err)
 	}
 
-	// "receive" the message, updating the noise session handshake state
-	xx_msgbuf := core.NewMessageBuffer(msgbuf.NE(), nil, nil)
-	var valid bool
-	s.ns, _, valid = core.XXRecvMessage(s.ns, &xx_msgbuf)
-	if !valid {
-		return fmt.Errorf("runHandshake_xx validation fail")
+	// stage 2 //
+	err = s.sendHandshakeMessage(payload)
+	if err != nil {
+		return fmt.Errorf("error sending handshake message: %s", err)
 	}
+
+	if s.noisePipesSupport {
+		s.noiseStaticKeyCache.Store(s.remotePeer, s.ns.RemoteKey())
+	}
+	return nil
+}
+
+func (s *secureSession) runXXfallbackAsResponder(ctx context.Context, payload []byte) error {
+	// stage 0 of regular XX flow is skipped in XXfallback for responder,
+	// as the state is initialized from an earlier stage 0 IK message
 
 	// stage 1 //
-	err = s.sendHandshakeMessage(payload)
+	err := s.sendHandshakeMessage(payload)
 	if err != nil {
 		return fmt.Errorf("runHandshake_xx stage=1 initiator=false err=%s", err)
 	}
@@ -168,13 +140,16 @@ func (s *secureSession) runXX(ctx context.Context, payload []byte) (err error) {
 	return s.runXXAsResponder(ctx, payload)
 }
 
-func (s *secureSession) runXXfallback(ctx context.Context, payload []byte, initialMsg []byte) (err error) {
-	e := s.ns.Ephemeral()
-	// new XX noise session
-	s.ns = core.XXInitSession(s.initiator, s.prologue, *s.noiseKeypair, [32]byte{})
+func (s *secureSession) runXXfallback(ctx context.Context, payload []byte, initialMsg []byte, ephemeral *core.Keypair) (err error) {
+	// new XXfallback noise session
+	ns, remotePayload, err := core.XXfallbackInitSession(s.initiator, s.prologue, *s.noiseKeypair, [32]byte{}, initialMsg, ephemeral)
+	if err != nil {
+		return err
+	}
+	s.ns = ns
 
 	if s.initiator {
-		return s.runXXfallbackAsInitiator(ctx, payload, initialMsg, e)
+		return s.runXXfallbackAsInitiator(ctx, payload, remotePayload)
 	}
-	return s.runXXfallbackAsResponder(ctx, payload, initialMsg)
+	return s.runXXfallbackAsResponder(ctx, payload)
 }
