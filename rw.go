@@ -2,6 +2,7 @@ package noise
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 )
@@ -37,6 +38,10 @@ func (s *secureSession) readMsgInsecure() ([]byte, error) {
 }
 
 func (s *secureSession) readSecure(buf []byte) (int, error) {
+	if !s.xx_complete && !s.ik_complete {
+		return 0, errors.New("handshake incomplete")
+	}
+
 	s.readLock.Lock()
 	defer s.readLock.Unlock()
 
@@ -56,7 +61,7 @@ func (s *secureSession) readSecure(buf []byte) (int, error) {
 			return 0, err
 		}
 
-		plaintext, err := s.Decrypt(ciphertext)
+		plaintext, err := s.ns.Decrypt(ciphertext)
 		if err != nil {
 			return 0, err
 		}
@@ -87,16 +92,17 @@ func (s *secureSession) readSecure(buf []byte) (int, error) {
 }
 
 func (s *secureSession) writeSecure(in []byte) (int, error) {
+	if !s.xx_complete && !s.ik_complete {
+		return 0, errors.New("handshake incomplete")
+	}
+
 	s.writeLock.Lock()
 	defer s.writeLock.Unlock()
 
 	writeChunk := func(in []byte) (int, error) {
-		ciphertext, err := s.Encrypt(in)
-		if err != nil {
-			return 0, err
-		}
+		ciphertext := s.ns.Encrypt(in)
 
-		err = s.writeMsgInsecure(ciphertext)
+		err := s.writeMsgInsecure(ciphertext)
 		if err != nil {
 			return 0, err
 		}
