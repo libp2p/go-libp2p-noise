@@ -122,33 +122,11 @@ func xxReadMessageC(hs *handshakestate, message *MessageBuffer) ([32]byte, []byt
 	return hs.ss.h, plaintext, (valid1 && valid2), cs1, cs2
 }
 
-/* ---------------------------------------------------------------- *
- * UTILITY FUNCTIONS                                                *
- * ---------------------------------------------------------------- */
+type xxCodec struct{}
 
-// Encodes a MessageBuffer from stage 0
-func XXEncode0(mb *MessageBuffer) []byte {
-	enc := []byte{}
+var _ HandshakeCodec = (*xxCodec)(nil)
 
-	enc = append(enc, mb.ne[:]...)
-	enc = append(enc, mb.ciphertext...)
-
-	return enc
-}
-
-// Encodes a MessageBuffer from stage 1 and 2
-func XXEncode1(mb *MessageBuffer) []byte {
-	enc := []byte{}
-
-	enc = append(enc, mb.ne[:]...)
-	enc = append(enc, mb.ns...)
-	enc = append(enc, mb.ciphertext...)
-
-	return enc
-}
-
-// Decodes initial message (stage 0) into MessageBuffer
-func XXDecode0(in []byte) (*MessageBuffer, error) {
+func (x xxCodec) Decode0(in []byte) (*MessageBuffer, error) {
 	if len(in) < 32 {
 		return nil, errors.New("cannot decode stage 0 MessageBuffer: length less than 32 bytes")
 	}
@@ -160,8 +138,7 @@ func XXDecode0(in []byte) (*MessageBuffer, error) {
 	return mb, nil
 }
 
-// Decodes messages at stage 1 or 2 into MessageBuffer
-func XXDecode1(in []byte) (*MessageBuffer, error) {
+func (x xxCodec) Decode1(in []byte) (*MessageBuffer, error) {
 	if len(in) < 80 {
 		return nil, errors.New("cannot decode stage 1/2 MessageBuffer: length less than 96 bytes")
 	}
@@ -174,9 +151,53 @@ func XXDecode1(in []byte) (*MessageBuffer, error) {
 	return mb, nil
 }
 
-/* ---------------------------------------------------------------- *
- * PROCESSES                                                        *
- * ---------------------------------------------------------------- */
+func (x xxCodec) Encode0(mb *MessageBuffer) []byte {
+	enc := []byte{}
+
+	enc = append(enc, mb.ne[:]...)
+	enc = append(enc, mb.ciphertext...)
+
+	return enc
+}
+
+func (x xxCodec) Encode1(mb *MessageBuffer) []byte {
+	enc := []byte{}
+
+	enc = append(enc, mb.ne[:]...)
+	enc = append(enc, mb.ns...)
+	enc = append(enc, mb.ciphertext...)
+
+	return enc
+}
+
+func (x xxCodec) AcceptMessageBuffer(s *NoiseSession, msg *MessageBuffer) (plaintext []byte, valid bool) {
+	if s.mc == 0 {
+		_, plaintext, valid = xxReadMessageA(&s.hs, msg)
+	}
+	if s.mc == 1 {
+		_, plaintext, valid = xxReadMessageB(&s.hs, msg)
+	}
+	if s.mc == 2 {
+		s.h, plaintext, valid, s.cs1, s.cs2 = xxReadMessageC(&s.hs, msg)
+	}
+	s.mc = s.mc + 1
+	return plaintext, valid
+}
+
+func (x xxCodec) PrepareMessageBuffer(s *NoiseSession, msg []byte, ephemeral *Keypair) MessageBuffer {
+	var messageBuffer MessageBuffer
+	if s.mc == 0 {
+		_, messageBuffer = xxWriteMessageA(&s.hs, msg, ephemeral)
+	}
+	if s.mc == 1 {
+		_, messageBuffer = xxWriteMessageB(&s.hs, msg)
+	}
+	if s.mc == 2 {
+		s.h, messageBuffer, s.cs1, s.cs2 = xxWriteMessageC(&s.hs, msg)
+	}
+	s.mc = s.mc + 1
+	return messageBuffer
+}
 
 func XXInitSession(initiator bool, prologue []byte, s Keypair, rs [32]byte) *NoiseSession {
 	var session NoiseSession
@@ -188,6 +209,7 @@ func XXInitSession(initiator bool, prologue []byte, s Keypair, rs [32]byte) *Noi
 	}
 	session.i = initiator
 	session.mc = 0
+	session.codec = xxCodec{}
 	return &session
 }
 

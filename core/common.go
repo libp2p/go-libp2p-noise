@@ -18,6 +18,17 @@ import (
  * TYPES                                                            *
  * ---------------------------------------------------------------- */
 
+type HandshakeCodec interface {
+	Encode0(*MessageBuffer) []byte
+	Encode1(*MessageBuffer) []byte
+
+	Decode0([]byte) (*MessageBuffer, error)
+	Decode1([]byte) (*MessageBuffer, error)
+
+	AcceptMessageBuffer(s *NoiseSession, msg *MessageBuffer) (plaintext []byte, valid bool)
+	PrepareMessageBuffer(s *NoiseSession, buf []byte, ephemeral *Keypair) MessageBuffer
+}
+
 type Keypair struct {
 	publicKey  [32]byte
 	privateKey [32]byte
@@ -50,12 +61,13 @@ type handshakestate struct {
 }
 
 type NoiseSession struct {
-	hs  handshakestate
-	h   [32]byte
-	cs1 cipherstate
-	cs2 cipherstate
-	mc  uint64
-	i   bool
+	codec HandshakeCodec
+	hs    handshakestate
+	h     [32]byte
+	cs1   cipherstate
+	cs2   cipherstate
+	mc    uint64
+	i     bool
 }
 
 func (ns *NoiseSession) CS1() *cipherstate {
@@ -112,6 +124,32 @@ func (ns *NoiseSession) Decrypt(ciphertext []byte) ([]byte, error) {
 		return nil, errors.New("decryption failed: authentication data invalid")
 	}
 	return plaintext, nil
+}
+
+func (ns *NoiseSession) AcceptHandshakeMessage(buf []byte) (plaintext []byte, err error) {
+	decoder := ns.codec.Decode0
+	if ns.mc > 0 {
+		decoder = ns.codec.Decode1
+	}
+	msgbuf, err := decoder(buf)
+	if err != nil {
+		return nil, err
+	}
+	plaintext, valid := ns.codec.AcceptMessageBuffer(ns, msgbuf)
+	if !valid {
+		return nil, errors.New("handshake message invalid")
+	}
+	return plaintext, nil
+}
+
+func (ns *NoiseSession) PrepareHandshakeMessage(buf []byte, ephemeral *Keypair) (ciphertext []byte, err error) {
+	encoder := ns.codec.Encode0
+	if ns.mc > 0 {
+		encoder = ns.codec.Encode1
+	}
+	msgbuf := ns.codec.PrepareMessageBuffer(ns, buf, ephemeral)
+	ciphertext = encoder(&msgbuf)
+	return ciphertext, nil
 }
 
 func NewMessageBuffer(ne [32]byte, ns []byte, ciphertext []byte) MessageBuffer {

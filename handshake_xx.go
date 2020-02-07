@@ -7,30 +7,16 @@ import (
 	"github.com/libp2p/go-libp2p-noise/core"
 )
 
-func (s *secureSession) xxRecvHandshakeMessage(stageZero bool) (encrypted []byte, plaintext []byte, err error) {
-	if stageZero {
-		return s.recvHandshakeMessage(core.XXDecode0, core.XXRecvMessage)
-	}
-	return s.recvHandshakeMessage(core.XXDecode1, core.XXRecvMessage)
-}
-
-func (s *secureSession) xxSendHandshakeMessage(payload []byte, initial_stage bool) error {
-	if initial_stage {
-		return s.sendHandshakeMessage(payload, core.XXEncode0, core.XXSendMessage)
-	}
-	return s.sendHandshakeMessage(payload, core.XXEncode1, core.XXSendMessage)
-}
-
 func (s *secureSession) runXXAsInitiator(ctx context.Context, payload []byte) error {
 	// stage 0
-	err := s.xxSendHandshakeMessage(nil, true)
+	err := s.sendHandshakeMessage(nil)
 	if err != nil {
 		return fmt.Errorf("error sending handshake message: %s", err)
 	}
 
 	// stage 1
 	// read reply
-	_, plaintext, err := s.xxRecvHandshakeMessage(false)
+	_, plaintext, err := s.readHandshakeMessage()
 	if err != nil {
 		return fmt.Errorf("error reading handshake message: %s", err)
 	}
@@ -41,7 +27,7 @@ func (s *secureSession) runXXAsInitiator(ctx context.Context, payload []byte) er
 	}
 
 	// stage 2 //
-	err = s.xxSendHandshakeMessage(payload, false)
+	err = s.sendHandshakeMessage(payload)
 	if err != nil {
 		return fmt.Errorf("runHandshake_xx stage=2 initiator=true err=%s", err)
 	}
@@ -53,12 +39,11 @@ func (s *secureSession) runXXAsInitiator(ctx context.Context, payload []byte) er
 	return nil
 }
 
-func (s *secureSession) runXXfallbackAsInitiator(ctx context.Context, payload []byte, ikMsg []byte) error {
+func (s *secureSession) runXXfallbackAsInitiator(ctx context.Context, payload []byte, ikMsg []byte, ikEphemeral *core.Keypair) error {
 	// stage 0
 
 	// get ephemeral key from previous IK NoiseSession
-	e_ik := s.ns.Ephemeral()
-	e_xx := core.NewKeypair(e_ik.PubKey(), e_ik.PrivKey())
+	e_xx := core.NewKeypair(ikEphemeral.PubKey(), ikEphemeral.PrivKey())
 
 	// initialize state as if we sent the first message
 	s.ns, _ = core.XXSendMessage(s.ns, nil, &e_xx)
@@ -83,7 +68,7 @@ func (s *secureSession) runXXfallbackAsInitiator(ctx context.Context, payload []
 	}
 
 	// stage 2 //
-	err = s.xxSendHandshakeMessage(payload, false)
+	err = s.sendHandshakeMessage(payload)
 	if err != nil {
 		return fmt.Errorf("error sending handshake message: %s", err)
 	}
@@ -97,13 +82,13 @@ func (s *secureSession) runXXfallbackAsInitiator(ctx context.Context, payload []
 func (s *secureSession) runXXAsResponder(ctx context.Context, payload []byte) error {
 	// stage 0
 	// read message
-	_, _, err := s.xxRecvHandshakeMessage(true)
+	_, _, err := s.readHandshakeMessage()
 	if err != nil {
 		return fmt.Errorf("error reading handshake message: %s", err)
 	}
 
 	// stage 1 //
-	err = s.xxSendHandshakeMessage(payload, false)
+	err = s.sendHandshakeMessage(payload)
 	if err != nil {
 		return fmt.Errorf("runHandshake_xx stage=1 initiator=false err=%s", err)
 	}
@@ -111,7 +96,7 @@ func (s *secureSession) runXXAsResponder(ctx context.Context, payload []byte) er
 	// stage 2 //
 	// read message
 	var plaintext []byte
-	_, plaintext, err = s.xxRecvHandshakeMessage(false)
+	_, plaintext, err = s.readHandshakeMessage()
 	if err != nil {
 		return fmt.Errorf("runHandshake_xx stage=2 initiator=false err=%s", err)
 	}
@@ -144,7 +129,7 @@ func (s *secureSession) runXXfallbackAsResponder(ctx context.Context, payload []
 	}
 
 	// stage 1 //
-	err = s.xxSendHandshakeMessage(payload, false)
+	err = s.sendHandshakeMessage(payload)
 	if err != nil {
 		return fmt.Errorf("runHandshake_xx stage=1 initiator=false err=%s", err)
 	}
@@ -152,7 +137,7 @@ func (s *secureSession) runXXfallbackAsResponder(ctx context.Context, payload []
 	// stage 2 //
 	// read message
 	var plaintext []byte
-	_, plaintext, err = s.xxRecvHandshakeMessage(false)
+	_, plaintext, err = s.readHandshakeMessage()
 	if err != nil {
 		return fmt.Errorf("runHandshake_xx stage=2 initiator=false err=%s", err)
 	}
@@ -184,11 +169,12 @@ func (s *secureSession) runXX(ctx context.Context, payload []byte) (err error) {
 }
 
 func (s *secureSession) runXXfallback(ctx context.Context, payload []byte, initialMsg []byte) (err error) {
+	e := s.ns.Ephemeral()
 	// new XX noise session
 	s.ns = core.XXInitSession(s.initiator, s.prologue, *s.noiseKeypair, [32]byte{})
 
 	if s.initiator {
-		return s.runXXfallbackAsInitiator(ctx, payload, initialMsg)
+		return s.runXXfallbackAsInitiator(ctx, payload, initialMsg, e)
 	}
 	return s.runXXfallbackAsResponder(ctx, payload, initialMsg)
 }

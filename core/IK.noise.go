@@ -157,6 +157,77 @@ func IKDecode1(in []byte) (*MessageBuffer, error) {
  * PROCESSES                                                        *
  * ---------------------------------------------------------------- */
 
+type ikHandshake struct{}
+
+var _ HandshakeCodec = (*ikHandshake)(nil)
+
+func (i ikHandshake) Encode0(mb *MessageBuffer) []byte {
+	enc := []byte{}
+
+	enc = append(enc, mb.ne[:]...)
+	enc = append(enc, mb.ns...)
+	enc = append(enc, mb.ciphertext...)
+
+	return enc
+}
+
+func (i ikHandshake) Encode1(mb *MessageBuffer) []byte {
+	enc := []byte{}
+
+	enc = append(enc, mb.ne[:]...)
+	enc = append(enc, mb.ciphertext...)
+
+	return enc
+}
+
+func (i ikHandshake) Decode0(in []byte) (*MessageBuffer, error) {
+	if len(in) < 80 {
+		return nil, errors.New("cannot decode stage 0 MessageBuffer: length less than 80 bytes")
+	}
+
+	mb := new(MessageBuffer)
+	copy(mb.ne[:], in[:32])
+	mb.ns = in[32:80]
+	mb.ciphertext = in[80:]
+
+	return mb, nil
+}
+
+func (i ikHandshake) Decode1(in []byte) (*MessageBuffer, error) {
+	if len(in) < 32 {
+		return nil, errors.New("cannot decode stage 1 MessageBuffer: length less than 32 bytes")
+	}
+
+	mb := new(MessageBuffer)
+	copy(mb.ne[:], in[:32])
+	mb.ciphertext = in[32:]
+
+	return mb, nil
+}
+
+func (i ikHandshake) AcceptMessageBuffer(session *NoiseSession, message *MessageBuffer) (plaintext []byte, valid bool) {
+	if session.mc == 0 {
+		_, plaintext, valid = ikReadMesssageA(&session.hs, message)
+	}
+	if session.mc == 1 {
+		session.h, plaintext, valid, session.cs1, session.cs2 = ikReadMessageB(&session.hs, message)
+	}
+	session.mc = session.mc + 1
+	return plaintext, valid
+}
+
+func (i ikHandshake) PrepareMessageBuffer(s *NoiseSession, msg []byte, ephemeral *Keypair) MessageBuffer {
+	var messageBuffer MessageBuffer
+	if s.mc == 0 {
+		_, messageBuffer = ikWriteMessageA(&s.hs, msg)
+	}
+	if s.mc == 1 {
+		s.h, messageBuffer, s.cs1, s.cs2 = ikWriteMessageB(&s.hs, msg)
+	}
+	s.mc = s.mc + 1
+	return messageBuffer
+}
+
 func IKInitSession(initiator bool, prologue []byte, s Keypair, rs [32]byte) *NoiseSession {
 	var session NoiseSession
 	psk := emptyKey
@@ -167,6 +238,7 @@ func IKInitSession(initiator bool, prologue []byte, s Keypair, rs [32]byte) *Noi
 	}
 	session.i = initiator
 	session.mc = 0
+	session.codec = ikHandshake{}
 	return &session
 }
 

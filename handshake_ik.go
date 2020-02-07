@@ -27,20 +27,6 @@ func (s *secureSession) runIK(ctx context.Context, payload []byte) ([]byte, erro
 	return s.runIKAsResponder(ctx, payload)
 }
 
-func (s *secureSession) ikSendHandshakeMessage(payload []byte, initial_stage bool) error {
-	if initial_stage {
-		return s.sendHandshakeMessage(payload, core.IKEncode0, core.IKSendMessage)
-	}
-	return s.sendHandshakeMessage(payload, core.IKEncode1, core.IKSendMessage)
-}
-
-func (s *secureSession) ikRecvHandshakeMessage(initial_stage bool) (buf []byte, plaintext []byte, err error) {
-	if initial_stage {
-		return s.recvHandshakeMessage(core.IKDecode0, core.IKRecvMessage)
-	}
-	return s.recvHandshakeMessage(core.IKDecode1, core.IKRecvMessage)
-}
-
 func (s *secureSession) runIKAsInitiator(ctx context.Context, payload []byte) ([]byte, error) {
 	remoteNoiseKey := s.noiseStaticKeyCache.Load(s.remotePeer)
 	// bail out early if we don't know the remote Noise key
@@ -49,7 +35,7 @@ func (s *secureSession) runIKAsInitiator(ctx context.Context, payload []byte) ([
 	}
 
 	// stage 0 //
-	err := s.ikSendHandshakeMessage(payload, true)
+	err := s.sendHandshakeMessage(payload)
 	if err != nil {
 		return nil, fmt.Errorf("runIK stage=0 initiator=true err=%s", err)
 	}
@@ -57,7 +43,7 @@ func (s *secureSession) runIKAsInitiator(ctx context.Context, payload []byte) ([
 	// stage 1 //
 
 	// read message
-	buf, plaintext, err := s.ikRecvHandshakeMessage(false)
+	buf, plaintext, err := s.readHandshakeMessage()
 	if err != nil {
 		return buf, fmt.Errorf("runIK stage=1 initiator=true err=%s", err)
 	}
@@ -95,7 +81,7 @@ func (s *secureSession) runIKAsResponder(ctx context.Context, payload []byte) ([
 	// stage 0 //
 
 	// read message
-	buf, plaintext, err := s.ikRecvHandshakeMessage(true)
+	buf, plaintext, err := s.readHandshakeMessage()
 	if err != nil {
 		return buf, fmt.Errorf("runIK stage=0 initiator=false err=%s", err)
 	}
@@ -127,7 +113,7 @@ func (s *secureSession) runIKAsResponder(ctx context.Context, payload []byte) ([
 
 	// stage 1 //
 
-	err = s.ikSendHandshakeMessage(payload, false)
+	err = s.sendHandshakeMessage(payload)
 	if err != nil {
 		return nil, fmt.Errorf("runIK stage=1 initiator=false send err=%s", err)
 	}
