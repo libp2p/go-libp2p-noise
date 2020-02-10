@@ -102,58 +102,6 @@ func ikReadMessageB(hs *handshakestate, message *MessageBuffer) ([32]byte, []byt
 }
 
 /* ---------------------------------------------------------------- *
- * UTILITY FUNCTIONS                                                *
- * ---------------------------------------------------------------- */
-
-// Encodes a MessageBuffer from stage 0
-func IKEncode0(mb *MessageBuffer) []byte {
-	enc := []byte{}
-
-	enc = append(enc, mb.ne[:]...)
-	enc = append(enc, mb.ns...)
-	enc = append(enc, mb.ciphertext...)
-
-	return enc
-}
-
-// Encodes a MessageBuffer from stage 1
-func IKEncode1(mb *MessageBuffer) []byte {
-	enc := []byte{}
-
-	enc = append(enc, mb.ne[:]...)
-	enc = append(enc, mb.ciphertext...)
-
-	return enc
-}
-
-// Decodes initial message (stage 0) into MessageBuffer
-func IKDecode0(in []byte) (*MessageBuffer, error) {
-	if len(in) < 80 {
-		return nil, errors.New("cannot decode stage 0 MessageBuffer: length less than 80 bytes")
-	}
-
-	mb := new(MessageBuffer)
-	copy(mb.ne[:], in[:32])
-	mb.ns = in[32:80]
-	mb.ciphertext = in[80:]
-
-	return mb, nil
-}
-
-// Decodes messages at stage 1 into MessageBuffer
-func IKDecode1(in []byte) (*MessageBuffer, error) {
-	if len(in) < 32 {
-		return nil, errors.New("cannot decode stage 1 MessageBuffer: length less than 32 bytes")
-	}
-
-	mb := new(MessageBuffer)
-	copy(mb.ne[:], in[:32])
-	mb.ciphertext = in[32:]
-
-	return mb, nil
-}
-
-/* ---------------------------------------------------------------- *
  * PROCESSES                                                        *
  * ---------------------------------------------------------------- */
 
