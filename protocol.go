@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/gogo/protobuf/proto"
-	logging "github.com/ipfs/go-log"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
 
@@ -26,8 +25,6 @@ const payload_string = "noise-libp2p-static-key:"
 // bytes of authentication data. To write larger plaintexts, we split them
 // into fragments of maxPlaintextLength before encrypting.
 const maxPlaintextLength = 65519
-
-var log = logging.Logger("noise")
 
 var errNoKeypair = errors.New("cannot initiate secureSession - transport has no noise keypair")
 
