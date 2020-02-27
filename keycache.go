@@ -12,8 +12,7 @@ type KeyCache struct {
 
 func NewKeyCache() *KeyCache {
 	return &KeyCache{
-		lock: sync.RWMutex{},
-		m:    make(map[peer.ID][32]byte),
+		m: make(map[peer.ID][32]byte),
 	}
 }
 
