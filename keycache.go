@@ -23,8 +23,9 @@ func (kc *KeyCache) Store(p peer.ID, key [32]byte) {
 	kc.lock.Unlock()
 }
 
-func (kc *KeyCache) Load(p peer.ID) [32]byte {
+func (kc *KeyCache) Load(p peer.ID) (key [32]byte, ok bool) {
 	kc.lock.RLock()
 	defer kc.lock.RUnlock()
-	return kc.m[p]
+	key, ok = kc.m[p]
+	return key, ok
 }

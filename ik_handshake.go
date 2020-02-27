@@ -76,14 +76,14 @@ func (s *secureSession) ik_recvHandshakeMessage(initial_stage bool) (buf []byte,
 func (s *secureSession) runHandshake_ik(ctx context.Context, payload []byte) ([]byte, error) {
 	kp := ik.NewKeypair(s.noiseKeypair.publicKey, s.noiseKeypair.privateKey)
 
-	remoteNoiseKey := s.noiseStaticKeyCache.Load(s.remotePeer)
+	remoteNoiseKey, hasKey := s.noiseStaticKeyCache.Load(s.remotePeer)
 
 	// new IK noise session
 	s.ik_ns = ik.InitSession(s.initiator, s.prologue, kp, remoteNoiseKey)
 
 	if s.initiator {
 		// bail out early if we don't know the remote Noise key
-		if remoteNoiseKey == [32]byte{} {
+		if !hasKey {
 			return nil, fmt.Errorf("runHandshake_ik aborting - unknown static key for peer %s", s.remotePeer.Pretty())
 		}
 

@@ -184,8 +184,9 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 	// The exception is when we're the initiator and don't know the other party's
 	// static Noise key. Then IK will always fail, so we go straight to XX.
 	tryIK := s.noisePipesSupport
-	if s.initiator && s.noiseStaticKeyCache.Load(s.remotePeer) == [32]byte{} {
-		tryIK = false
+	if tryIK && s.initiator {
+		// We need a key.
+		_, tryIK = s.noiseStaticKeyCache.Load(s.remotePeer)
 	}
 	if tryIK {
 		// we're either a responder or an initiator with a known static key for the remote peer, try IK
