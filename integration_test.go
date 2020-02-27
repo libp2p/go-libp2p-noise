@@ -4,17 +4,19 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
-	"github.com/libp2p/go-libp2p"
-	"github.com/libp2p/go-libp2p-core/crypto"
-	"github.com/libp2p/go-libp2p-core/host"
-	net "github.com/libp2p/go-libp2p-core/network"
-	"github.com/libp2p/go-libp2p-core/peer"
-	ma "github.com/multiformats/go-multiaddr"
 	"io"
 	"io/ioutil"
 	mrand "math/rand"
 	"testing"
 	"time"
+
+	ma "github.com/multiformats/go-multiaddr"
+
+	"github.com/libp2p/go-libp2p"
+	"github.com/libp2p/go-libp2p-core/crypto"
+	"github.com/libp2p/go-libp2p-core/host"
+	"github.com/libp2p/go-libp2p-core/network"
+	"github.com/libp2p/go-libp2p-core/peer"
 )
 
 const testProtocolID = "/test/noise/integration"
@@ -277,7 +279,7 @@ func TestConstrucingWithMaker(t *testing.T) {
 	_ = h.Close()
 }
 
-func writeRandomPayloadAndClose(t *testing.T, stream net.Stream) error {
+func writeRandomPayloadAndClose(t *testing.T, stream network.Stream) error {
 	t.Helper()
 	size := 1 << 24
 	r := mrand.New(mrand.NewSource(42))
@@ -293,8 +295,8 @@ func writeRandomPayloadAndClose(t *testing.T, stream net.Stream) error {
 	return stream.Close()
 }
 
-func streamHandler(t *testing.T) func(net.Stream) {
-	return func(stream net.Stream) {
+func streamHandler(t *testing.T) func(network.Stream) {
+	return func(stream network.Stream) {
 		t.Helper()
 		defer func() {
 			if err := stream.Close(); err != nil {

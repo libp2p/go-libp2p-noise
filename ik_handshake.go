@@ -3,12 +3,14 @@ package noise
 import (
 	"context"
 	"fmt"
-	"github.com/libp2p/go-libp2p-core/peer"
 	"io"
 
-	proto "github.com/gogo/protobuf/proto"
-	ik "github.com/libp2p/go-libp2p-noise/ik"
-	pb "github.com/libp2p/go-libp2p-noise/pb"
+	"github.com/gogo/protobuf/proto"
+
+	"github.com/libp2p/go-libp2p-core/peer"
+
+	"github.com/libp2p/go-libp2p-noise/ik"
+	"github.com/libp2p/go-libp2p-noise/pb"
 )
 
 func (s *secureSession) ik_sendHandshakeMessage(payload []byte, initial_stage bool) error {

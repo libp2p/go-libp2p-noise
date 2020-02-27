@@ -17,15 +17,15 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
-
 	"encoding/binary"
 	"errors"
-	"golang.org/x/crypto/chacha20poly1305"
-	"golang.org/x/crypto/curve25519"
-	"golang.org/x/crypto/hkdf"
 	"hash"
 	"io"
 	"math"
+
+	"golang.org/x/crypto/chacha20poly1305"
+	"golang.org/x/crypto/curve25519"
+	"golang.org/x/crypto/hkdf"
 )
 
 /* ---------------------------------------------------------------- *

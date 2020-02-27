@@ -3,10 +3,13 @@ package xx
 import (
 	"crypto/rand"
 	"encoding/hex"
-	proto "github.com/gogo/protobuf/proto"
-	"github.com/libp2p/go-libp2p-core/crypto"
-	pb "github.com/libp2p/go-libp2p-noise/pb"
 	"testing"
+
+	"github.com/gogo/protobuf/proto"
+
+	"github.com/libp2p/go-libp2p-core/crypto"
+
+	"github.com/libp2p/go-libp2p-noise/pb"
 )
 
 func TestGetHkdf(t *testing.T) {
