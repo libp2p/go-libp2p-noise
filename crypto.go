@@ -6,7 +6,7 @@ import (
 )
 
 func (s *secureSession) Encrypt(plaintext []byte) (ciphertext []byte, err error) {
-	if !s.xx_complete {
+	if !s.handshakeComplete {
 		return nil, errors.New("encrypt err: haven't completed handshake")
 	}
 
@@ -23,7 +23,7 @@ func (s *secureSession) Encrypt(plaintext []byte) (ciphertext []byte, err error)
 
 func (s *secureSession) Decrypt(ciphertext []byte) (plaintext []byte, err error) {
 	var ok bool
-	if !s.xx_complete {
+	if !s.handshakeComplete {
 		return nil, errors.New("decrypt err: haven't completed handshake")
 	}
 
