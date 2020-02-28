@@ -14,7 +14,7 @@ import (
 
 func (s *secureSession) xx_sendHandshakeMessage(payload []byte, initial_stage bool) error {
 	var msgbuf xx.MessageBuffer
-	s.xx_ns, msgbuf = xx.SendMessage(s.xx_ns, payload, nil)
+	s.ns, msgbuf = xx.SendMessage(s.ns, payload)
 	var encMsgBuf []byte
 	if initial_stage {
 		encMsgBuf = msgbuf.Encode0()
@@ -59,7 +59,7 @@ func (s *secureSession) xx_recvHandshakeMessage(initial_stage bool) (buf []byte,
 		return buf, nil, false, fmt.Errorf("xx_recvHandshakeMessage decode msg err=%s", err)
 	}
 
-	s.xx_ns, plaintext, valid = xx.RecvMessage(s.xx_ns, msgbuf)
+	s.ns, plaintext, valid = xx.RecvMessage(s.ns, msgbuf)
 	if !valid {
 		return buf, nil, false, fmt.Errorf("xx_recvHandshakeMessage validation fail")
 	}
@@ -74,55 +74,31 @@ func (s *secureSession) xx_recvHandshakeMessage(initial_stage bool) (buf []byte,
 //   -> s, se
 // if fallback = true, initialMsg is used as the message in stage 1 of the initiator and stage 0
 // of the responder
-func (s *secureSession) runHandshake_xx(ctx context.Context, fallback bool, payload []byte, initialMsg []byte) (err error) {
+func (s *secureSession) runHandshake_xx(ctx context.Context, payload []byte) (err error) {
 	kp := xx.NewKeypair(s.noiseKeypair.publicKey, s.noiseKeypair.privateKey)
 
 	// new XX noise session
-	s.xx_ns = xx.InitSession(s.initiator, s.prologue, kp, [32]byte{})
+	s.ns = xx.InitSession(s.initiator, s.prologue, kp, [32]byte{})
 
 	if s.initiator {
 		// stage 0 //
 
-		if !fallback {
-			err = s.xx_sendHandshakeMessage(nil, true)
-			if err != nil {
-				return fmt.Errorf("runHandshake_xx stage 0 initiator fail: %s", err)
-			}
-		} else {
-			e_ik := s.ik_ns.Ephemeral()
-			e_xx := xx.NewKeypair(e_ik.PubKey(), e_ik.PrivKey())
-
-			// initialize state as if we sent the first message
-			s.xx_ns, _ = xx.SendMessage(s.xx_ns, nil, &e_xx)
+		err = s.xx_sendHandshakeMessage(nil, true)
+		if err != nil {
+			return fmt.Errorf("runHandshake_xx stage 0 initiator fail: %s", err)
 		}
 
 		// stage 1 //
 
 		var plaintext []byte
 		var valid bool
-		if !fallback {
-			// read reply
-			_, plaintext, valid, err = s.xx_recvHandshakeMessage(false)
-			if err != nil {
-				return fmt.Errorf("runHandshake_xx initiator stage 1 fail: %s", err)
-			}
-
-			if !valid {
-				return fmt.Errorf("runHandshake_xx stage 1 initiator validation fail")
-			}
-		} else {
-			var msgbuf *xx.MessageBuffer
-			msgbuf, err = xx.Decode1(initialMsg)
-
-			if err != nil {
-				return fmt.Errorf("runHandshake_xx decode msg fail: %s", err)
-			}
-
-			s.xx_ns, plaintext, valid = xx.RecvMessage(s.xx_ns, msgbuf)
-			if !valid {
-				return fmt.Errorf("runHandshake_xx validation fail")
-			}
-
+		// read reply
+		_, plaintext, valid, err = s.xx_recvHandshakeMessage(false)
+		if err != nil {
+			return fmt.Errorf("runHandshake_xx initiator stage 1 fail: %s", err)
+		}
+		if !valid {
+			return fmt.Errorf("runHandshake_xx stage 1 initiator validation fail")
 		}
 
 		// stage 2 //
@@ -154,13 +130,9 @@ func (s *secureSession) runHandshake_xx(ctx context.Context, fallback bool, payl
 		}
 
 		// verify payload is signed by libp2p key
-		err = s.verifyPayload(nhp, s.xx_ns.RemoteKey())
+		err = s.verifyPayload(nhp, s.ns.RemoteKey())
 		if err != nil {
 			return fmt.Errorf("runHandshake_xx stage=2 initiator=true verify payload err=%s", err)
-		}
-
-		if s.noisePipesSupport {
-			s.noiseStaticKeyCache.Store(s.remotePeer, s.xx_ns.RemoteKey())
 		}
 
 	} else {
@@ -171,29 +143,14 @@ func (s *secureSession) runHandshake_xx(ctx context.Context, fallback bool, payl
 		var valid bool
 		nhp := new(pb.NoiseHandshakePayload)
 
-		if !fallback {
-			// read message
-			_, plaintext, valid, err = s.xx_recvHandshakeMessage(true)
-			if err != nil {
-				return fmt.Errorf("runHandshake_xx stage=0 initiator=false err=%s", err)
-			}
+		// read message
+		_, plaintext, valid, err = s.xx_recvHandshakeMessage(true)
+		if err != nil {
+			return fmt.Errorf("runHandshake_xx stage=0 initiator=false err=%s", err)
+		}
 
-			if !valid {
-				return fmt.Errorf("runHandshake_xx stage=0 initiator=false err=validation fail")
-			}
-
-		} else {
-			var msgbuf *xx.MessageBuffer
-			msgbuf, err = xx.Decode0(initialMsg)
-			if err != nil {
-				return err
-			}
-
-			xx_msgbuf := xx.NewMessageBuffer(msgbuf.NE(), nil, nil)
-			s.xx_ns, plaintext, valid = xx.RecvMessage(s.xx_ns, &xx_msgbuf)
-			if !valid {
-				return fmt.Errorf("runHandshake_xx validation fail")
-			}
+		if !valid {
+			return fmt.Errorf("runHandshake_xx stage=0 initiator=false err=validation fail")
 		}
 
 		// stage 1 //
@@ -233,16 +190,12 @@ func (s *secureSession) runHandshake_xx(ctx context.Context, fallback bool, payl
 			return fmt.Errorf("runHandshake_xx stage=2 initiator=false set remote peer id err=%s", err)
 		}
 
-		s.remote.noiseKey = s.xx_ns.RemoteKey()
+		s.remote.noiseKey = s.ns.RemoteKey()
 
 		// verify payload is signed by libp2p key
 		err = s.verifyPayload(nhp, s.remote.noiseKey)
 		if err != nil {
 			return fmt.Errorf("runHandshake_xx stage=2 initiator=false err=%s", err)
-		}
-
-		if s.noisePipesSupport {
-			s.noiseStaticKeyCache.Store(s.remotePeer, s.remote.noiseKey)
 		}
 	}
 

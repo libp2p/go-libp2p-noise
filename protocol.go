@@ -15,7 +15,6 @@ import (
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
 
-	"github.com/libp2p/go-libp2p-noise/ik"
 	"github.com/libp2p/go-libp2p-noise/pb"
 	"github.com/libp2p/go-libp2p-noise/xx"
 )
@@ -44,14 +43,9 @@ type secureSession struct {
 	local  peerInfo
 	remote peerInfo
 
-	xx_ns *xx.NoiseSession
-	ik_ns *ik.NoiseSession
+	ns *xx.NoiseSession
 
 	xx_complete bool
-	ik_complete bool
-
-	noisePipesSupport   bool
-	noiseStaticKeyCache *KeyCache
 
 	noiseKeypair *Keypair
 
@@ -76,40 +70,26 @@ func newSecureSession(tpt *Transport, ctx context.Context, insecure net.Conn, re
 		return nil, errNoKeypair
 	}
 
-	// if the transport doesn't have a key cache, we make a new one just for
-	// this session. it's a bit of a waste, but saves us having to check if
-	// it's nil later
-	keyCache := tpt.noiseStaticKeyCache
-	if keyCache == nil {
-		keyCache = NewKeyCache()
-	}
-
 	localPeerInfo := peerInfo{
 		noiseKey:  tpt.noiseKeypair.publicKey,
 		libp2pKey: tpt.privateKey.GetPublic(),
 	}
 
 	s := &secureSession{
-		insecure:            insecure,
-		initiator:           initiator,
-		prologue:            []byte{},
-		localKey:            tpt.privateKey,
-		localPeer:           tpt.localID,
-		remotePeer:          remote,
-		local:               localPeerInfo,
-		noisePipesSupport:   tpt.noisePipesSupport,
-		noiseStaticKeyCache: keyCache,
-		msgBuffer:           []byte{},
-		noiseKeypair:        tpt.noiseKeypair,
+		insecure:     insecure,
+		initiator:    initiator,
+		prologue:     []byte{},
+		localKey:     tpt.privateKey,
+		localPeer:    tpt.localID,
+		remotePeer:   remote,
+		local:        localPeerInfo,
+		msgBuffer:    []byte{},
+		noiseKeypair: tpt.noiseKeypair,
 	}
 
 	err := s.runHandshake(ctx)
 
 	return s, err
-}
-
-func (s *secureSession) NoiseStaticKeyCache() *KeyCache {
-	return s.noiseStaticKeyCache
 }
 
 func (s *secureSession) NoisePublicKey() [32]byte {
@@ -180,37 +160,11 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 		return fmt.Errorf("runHandshake proto marshal payload err=%s", err)
 	}
 
-	// If we support Noise pipes, we try IK first, falling back to XX if IK fails.
-	// The exception is when we're the initiator and don't know the other party's
-	// static Noise key. Then IK will always fail, so we go straight to XX.
-	tryIK := s.noisePipesSupport
-	if s.initiator && s.noiseStaticKeyCache.Load(s.remotePeer) == [32]byte{} {
-		tryIK = false
+	err = s.runHandshake_xx(ctx, payloadEnc)
+	if err != nil {
+		return err
 	}
-	if tryIK {
-		// we're either a responder or an initiator with a known static key for the remote peer, try IK
-		buf, err := s.runHandshake_ik(ctx, payloadEnc)
-		if err != nil {
-			// IK failed, pipe to XXfallback
-			err = s.runHandshake_xx(ctx, true, payloadEnc, buf)
-			if err != nil {
-				return fmt.Errorf("runHandshake xx err=%s", err)
-			}
-
-			s.xx_complete = true
-		} else {
-			s.ik_complete = true
-		}
-	} else {
-		// unknown static key for peer, try XX
-		err := s.runHandshake_xx(ctx, false, payloadEnc, nil)
-		if err != nil {
-			return err
-		}
-
-		s.xx_complete = true
-	}
-
+	s.xx_complete = true
 	return nil
 }
 

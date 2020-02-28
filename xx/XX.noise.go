@@ -427,15 +427,10 @@ func initializeResponder(prologue []byte, s Keypair, rs [32]byte, psk [32]byte) 
 	return handshakestate{ss, s, e, rs, re, psk}
 }
 
-func writeMessageA(hs *handshakestate, payload []byte, e *Keypair) (*handshakestate, MessageBuffer) {
+func writeMessageA(hs *handshakestate, payload []byte) (*handshakestate, MessageBuffer) {
 	ne, ns, ciphertext := emptyKey, []byte{}, []byte{}
 
-	if e == nil {
-		hs.e = GenerateKeypair()
-	} else {
-		hs.e = *e
-	}
-
+	hs.e = GenerateKeypair()
 	ne = hs.e.public_key
 	mixHash(&hs.ss, ne[:])
 	/* No PSK, so skipping mixKey */
@@ -529,10 +524,10 @@ func InitSession(initiator bool, prologue []byte, s Keypair, rs [32]byte) *Noise
 	return &session
 }
 
-func SendMessage(session *NoiseSession, message []byte, ephemeral *Keypair) (*NoiseSession, MessageBuffer) {
+func SendMessage(session *NoiseSession, message []byte) (*NoiseSession, MessageBuffer) {
 	var messageBuffer MessageBuffer
 	if session.mc == 0 {
-		_, messageBuffer = writeMessageA(&session.hs, message, ephemeral)
+		_, messageBuffer = writeMessageA(&session.hs, message)
 	}
 	if session.mc == 1 {
 		_, messageBuffer = writeMessageB(&session.hs, message)
