@@ -21,14 +21,9 @@ func newTestTransport(t *testing.T, typ, bits int) *Transport {
 	if err != nil {
 		t.Fatal(err)
 	}
-	kp, err := GenerateKeypair()
-	if err != nil {
-		t.Fatal(err)
-	}
 	return &Transport{
-		localID:      id,
-		privateKey:   priv,
-		noiseKeypair: kp,
+		localID:    id,
+		privateKey: priv,
 	}
 }
 

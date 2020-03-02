@@ -17,9 +17,8 @@ var _ sec.SecureTransport = &Transport{}
 // Transport implements the interface sec.SecureTransport
 // https://godoc.org/github.com/libp2p/go-libp2p-core/sec#SecureConn
 type Transport struct {
-	localID      peer.ID
-	privateKey   crypto.PrivKey
-	noiseKeypair *Keypair
+	localID    peer.ID
+	privateKey crypto.PrivKey
 }
 
 // New creates a new Noise transport using the given private key as its
@@ -30,15 +29,9 @@ func New(privkey crypto.PrivKey) (*Transport, error) {
 		return nil, err
 	}
 
-	kp, err := GenerateKeypair()
-	if err != nil {
-		return nil, err
-	}
-
 	return &Transport{
-		localID:      localID,
-		privateKey:   privkey,
-		noiseKeypair: kp,
+		localID:    localID,
+		privateKey: privkey,
 	}, nil
 }
 

@@ -51,12 +51,13 @@ type peerInfo struct {
 // newSecureSession creates a noise session over the given insecure Conn, using the static
 // Noise keypair and libp2p identity keypair from the given Transport.
 func newSecureSession(tpt *Transport, ctx context.Context, insecure net.Conn, remote peer.ID, initiator bool) (*secureSession, error) {
-	if tpt.noiseKeypair == nil {
-		return nil, errNoKeypair
+	kp, err := GenerateKeypair()
+	if err != nil {
+		return nil, err
 	}
 
 	localPeerInfo := peerInfo{
-		noiseKey:  tpt.noiseKeypair.publicKey[:],
+		noiseKey:  kp.publicKey[:],
 		libp2pKey: tpt.privateKey.GetPublic(),
 	}
 
@@ -69,10 +70,10 @@ func newSecureSession(tpt *Transport, ctx context.Context, insecure net.Conn, re
 		remotePeer:   remote,
 		local:        localPeerInfo,
 		msgBuffer:    []byte{},
-		noiseKeypair: tpt.noiseKeypair,
+		noiseKeypair: kp,
 	}
 
-	err := s.runHandshake(ctx)
+	err = s.runHandshake(ctx)
 	if err != nil {
 		_ = s.insecure.Close()
 	}
