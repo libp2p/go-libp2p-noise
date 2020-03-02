@@ -105,7 +105,7 @@ func (s *secureSession) readMsgInsecure() ([]byte, error) {
 	buf := make([]byte, 2)
 	_, err := io.ReadFull(s.insecure, buf)
 	if err != nil {
-		return nil, fmt.Errorf("error reading length prefix: %s", err)
+		return nil, err
 	}
 	size := int(binary.BigEndian.Uint16(buf))
 	buf = make([]byte, size)
