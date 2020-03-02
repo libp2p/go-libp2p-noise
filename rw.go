@@ -27,7 +27,6 @@ func (s *secureSession) Read(buf []byte) (int, error) {
 	}
 
 	readChunk := func(buf []byte) (int, error) {
-		// read length of encrypted message
 		ciphertext, err := s.readMsgInsecure()
 		if err != nil {
 			return 0, err

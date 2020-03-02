@@ -2,22 +2,16 @@ package noise
 
 import (
 	"context"
-	"crypto/rand"
 	"net"
 	"sync"
 	"time"
 
 	"github.com/flynn/noise"
-	logging "github.com/ipfs/go-log"
-
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
 )
 
-var log = logging.Logger("noise")
-
 type noiseState struct {
-	initiator   bool
 	localStatic noise.DHKey
 
 	hs  *noise.HandshakeState
@@ -26,7 +20,8 @@ type noiseState struct {
 }
 
 type secureSession struct {
-	ns noiseState
+	initiator bool
+	ns        noiseState
 
 	localID   peer.ID
 	localKey  crypto.PrivKey
@@ -42,24 +37,15 @@ type secureSession struct {
 // newSecureSession creates a noise session over the given insecure Conn, using the
 // libp2p identity keypair from the given Transport.
 func newSecureSession(tpt *Transport, ctx context.Context, insecure net.Conn, remote peer.ID, initiator bool) (*secureSession, error) {
-	kp, err := noise.DH25519.GenerateKeypair(rand.Reader)
-	if err != nil {
-		return nil, err
-	}
-
 	s := &secureSession{
-		insecure: insecure,
-		ns: noiseState{
-			initiator:   initiator,
-			localStatic: kp,
-		},
+		insecure:  insecure,
+		initiator: initiator,
 		localID:   tpt.localID,
 		localKey:  tpt.privateKey,
 		remoteID:  remote,
-		msgBuffer: []byte{},
 	}
 
-	err = s.runHandshake(ctx)
+	err := s.runHandshake(ctx)
 	if err != nil {
 		_ = s.insecure.Close()
 	}
