@@ -7,7 +7,6 @@ import (
 	"net"
 	"testing"
 
-	//ik "github.com/libp2p/go-libp2p-noise/ik"
 	crypto "github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/sec"
@@ -31,12 +30,6 @@ func newTestTransport(t *testing.T, typ, bits int) *Transport {
 		privateKey:   priv,
 		noiseKeypair: kp,
 	}
-}
-
-func newTestTransportPipes(t *testing.T, typ, bits int) *Transport {
-	tpt := newTestTransport(t, typ, bits)
-	tpt.noisePipesSupport = true
-	return tpt
 }
 
 // Create a new pair of connected TCP sockets.
@@ -225,75 +218,5 @@ func TestHandshakeXX(t *testing.T) {
 
 	if !bytes.Equal(before, after) {
 		t.Errorf("Message mismatch. %v != %v", before, after)
-	}
-}
-
-// Test IK handshake
-func TestHandshakeIK(t *testing.T) {
-	initTransport := newTestTransportPipes(t, crypto.Ed25519, 2048)
-	respTransport := newTestTransportPipes(t, crypto.Ed25519, 2048)
-
-	// add responder's static key to initiator's key cache
-	keycache := NewKeyCache()
-	keycache.Store(respTransport.localID, respTransport.noiseKeypair.publicKey)
-	initTransport.noiseStaticKeyCache = keycache
-
-	// do IK handshake
-	initConn, respConn := connect(t, initTransport, respTransport)
-	defer initConn.Close()
-	defer respConn.Close()
-
-	before := []byte("hello world")
-	_, err := initConn.Write(before)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	after := make([]byte, len(before))
-	_, err = respConn.Read(after)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if !bytes.Equal(before, after) {
-		t.Errorf("Message mismatch. %v != %v", before, after)
-	}
-
-	// make sure IK was actually used
-	if !(initConn.ik_complete && respConn.ik_complete) {
-		t.Error("Expected IK handshake to be used")
-	}
-}
-
-// Test noise pipes
-func TestHandshakeXXfallback(t *testing.T) {
-	initTransport := newTestTransportPipes(t, crypto.Ed25519, 2048)
-	respTransport := newTestTransportPipes(t, crypto.Ed25519, 2048)
-
-	// turning on pipes causes it to default to IK, but since we haven't already
-	// done a handshake, it'll fallback to XX
-	initConn, respConn := connect(t, initTransport, respTransport)
-	defer initConn.Close()
-	defer respConn.Close()
-
-	before := []byte("hello world")
-	_, err := initConn.Write(before)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	after := make([]byte, len(before))
-	_, err = respConn.Read(after)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if !bytes.Equal(before, after) {
-		t.Errorf("Message mismatch. %v != %v", before, after)
-	}
-
-	// make sure XX was actually used
-	if !(initConn.xx_complete && respConn.xx_complete) {
-		t.Error("Expected XXfallback handshake to be used")
 	}
 }

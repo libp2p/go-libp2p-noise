@@ -35,13 +35,13 @@ func generateKey(seed int64) (crypto.PrivKey, error) {
 	return priv, nil
 }
 
-func makeNode(t *testing.T, seed int64, port int, kp *Keypair) (host.Host, error) {
+func makeNode(t *testing.T, seed int64, port int) (host.Host, error) {
 	priv, err := generateKey(seed)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	tpt, err := New(priv, NoiseKeyPair(kp))
+	tpt, err := New(priv)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,49 +62,17 @@ func makeNode(t *testing.T, seed int64, port int, kp *Keypair) (host.Host, error
 	return libp2p.New(ctx, options...)
 }
 
-func makeNodePipes(t *testing.T, seed int64, port int, rpid peer.ID, rpubkey [32]byte, kp *Keypair) (host.Host, error) {
-	priv, err := generateKey(seed)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	tpt, err := New(priv, UseNoisePipes, NoiseKeyPair(kp))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	tpt.noiseStaticKeyCache = NewKeyCache()
-	tpt.noiseStaticKeyCache.Store(rpid, rpubkey)
-
-	ip := "0.0.0.0"
-	addr, err := ma.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%d", ip, port))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	options := []libp2p.Option{
-		libp2p.Identity(priv),
-		libp2p.Security(ID, tpt),
-		libp2p.ListenAddrs(addr),
-	}
-
+func TestLibp2pIntegration(t *testing.T) {
 	ctx := context.Background()
 
-	h, err := libp2p.New(ctx, options...)
-	return h, err
-}
-
-func TestLibp2pIntegration_NoPipes(t *testing.T) {
-	ctx := context.Background()
-
-	ha, err := makeNode(t, 1, 33333, nil)
+	ha, err := makeNode(t, 1, 33333)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	defer ha.Close()
 
-	hb, err := makeNode(t, 2, 34343, nil)
+	hb, err := makeNode(t, 2, 34343)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,137 +112,6 @@ func TestLibp2pIntegration_NoPipes(t *testing.T) {
 	fmt.Println("fin")
 
 	time.Sleep(time.Second)
-}
-
-func TestLibp2pIntegration_WithPipes(t *testing.T) {
-	ctx := context.Background()
-
-	kpa, err := GenerateKeypair()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	ha, err := makeNodePipes(t, 1, 33333, "", [32]byte{}, kpa)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	defer ha.Close()
-
-	hb, err := makeNodePipes(t, 2, 34343, ha.ID(), kpa.publicKey, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	defer hb.Close()
-
-	ha.SetStreamHandler(testProtocolID, streamHandler(t))
-	hb.SetStreamHandler(testProtocolID, streamHandler(t))
-
-	addr, err := ma.NewMultiaddr(fmt.Sprintf("%s/p2p/%s", ha.Addrs()[0].String(), ha.ID()))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	fmt.Printf("ha: %s\n", addr)
-
-	addrInfo, err := peer.AddrInfoFromP2pAddr(addr)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = hb.Connect(ctx, *addrInfo)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	stream, err := hb.NewStream(ctx, ha.ID(), testProtocolID)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = writeRandomPayloadAndClose(t, stream)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	fmt.Println("fin")
-
-	time.Sleep(time.Second)
-}
-
-func TestLibp2pIntegration_XXFallback(t *testing.T) {
-	ctx := context.Background()
-
-	kpa, err := GenerateKeypair()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	ha, err := makeNode(t, 1, 33333, kpa)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	defer ha.Close()
-
-	hb, err := makeNodePipes(t, 2, 34343, ha.ID(), kpa.publicKey, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	defer hb.Close()
-
-	ha.SetStreamHandler(testProtocolID, streamHandler(t))
-	hb.SetStreamHandler(testProtocolID, streamHandler(t))
-
-	addr, err := ma.NewMultiaddr(fmt.Sprintf("%s/p2p/%s", hb.Addrs()[0].String(), hb.ID()))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	fmt.Printf("ha: %s\n", addr)
-
-	addrInfo, err := peer.AddrInfoFromP2pAddr(addr)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = ha.Connect(ctx, *addrInfo)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	stream, err := hb.NewStream(ctx, ha.ID(), testProtocolID)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = writeRandomPayloadAndClose(t, stream)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	fmt.Println("fin")
-
-	time.Sleep(time.Second)
-}
-
-func TestConstrucingWithMaker(t *testing.T) {
-	kp, err := GenerateKeypair()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	ctx := context.Background()
-	h, err := libp2p.New(ctx,
-		libp2p.Security(ID,
-			Maker(NoiseKeyPair(kp), UseNoisePipes)))
-
-	if err != nil {
-		t.Fatalf("unable to create libp2p host with Maker: %v", err)
-	}
-	_ = h.Close()
 }
 
 func writeRandomPayloadAndClose(t *testing.T, stream net.Stream) error {

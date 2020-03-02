@@ -29,11 +29,8 @@ negotiation in libp2p can be found in the [connection establishment spec][conn-s
 
 ## Status
 
-This implementation is being updated to track some recent changes to the [spec][noise-libp2p-spec]:
-
-- [ ] [use of channel binding token to prevent replay attacks](https://github.com/libp2p/specs/pull/234)
-
-We recommend waiting until those changes are in place before adopting go-libp2p-noise for production use.
+This implementation is currently considered "feature complete," but it has not yet
+been widely tested in a production environment. 
 
 ## Install
 
@@ -45,7 +42,7 @@ As `go-libp2p-noise` is still in development, it is not included as a default de
 go get github.com/libp2p/go-libp2p-noise
 ```
 
-This repo is [gomod](https://github.com/golang/go/wiki/Modules)-compatible, and users of
+This repo is [gomod](https://github.com/golang/go/wiki/Modules) compatible, and users of
 go 1.12 and later with modules enabled will automatically pull the latest tagged release
 by referencing this package. Upgrades to future releases can be managed using `go get`,
 or by editing your `go.mod` file as [described by the gomod documentation](https://github.com/golang/go/wiki/Modules#how-to-upgrade-and-downgrade-dependencies).
@@ -55,8 +52,27 @@ or by editing your `go.mod` file as [described by the gomod documentation](https
 `go-libp2p-noise` is not currently enabled by default when constructing a new libp2p
 [Host][godoc-host], so you will need to explicitly enable it in order to use it.
 
-The API for constructing a new Noise transport is currently in flux. This README will
-be updated once it stabilizes. 
+To do so, you can pass `noise.New` as an argument to a `libp2p.Security` `Option` when
+constructing a libp2p `Host` with `libp2p.New`:
+
+```go
+import (
+  libp2p "github.com/libp2p/go-libp2p"
+  noise "github.com/libp2p/go-libp2p-noise"
+)
+
+// wherever you create your libp2p instance:
+host := libp2p.New(
+  libp2p.Security(noise.ID, noise.New)
+)
+```
+
+Note that the above snippet will _replace_ the default security protocols. To add Noise
+as an additional protocol, chain it to the default options instead:
+
+```go
+libp2p.ChainOptions(libp2p.DefaultSecurity, libp2p.Security(noise.ID, noise.New))
+```
 
 ## Contribute
 
