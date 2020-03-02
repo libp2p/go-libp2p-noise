@@ -7,11 +7,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/flynn/noise"
 	logging "github.com/ipfs/go-log"
+
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
-
-	"github.com/libp2p/go-libp2p-noise/xx"
 )
 
 var log = logging.Logger("noise")
@@ -31,7 +31,9 @@ type secureSession struct {
 	local  peerInfo
 	remote peerInfo
 
-	ns *xx.NoiseSession
+	hs  *noise.HandshakeState
+	enc *noise.CipherState
+	dec *noise.CipherState
 
 	handshakeComplete bool
 	noiseKeypair      *Keypair
@@ -42,7 +44,7 @@ type secureSession struct {
 }
 
 type peerInfo struct {
-	noiseKey  [32]byte // static noise public key
+	noiseKey  []byte // static noise public key
 	libp2pKey crypto.PubKey
 }
 
@@ -54,7 +56,7 @@ func newSecureSession(tpt *Transport, ctx context.Context, insecure net.Conn, re
 	}
 
 	localPeerInfo := peerInfo{
-		noiseKey:  tpt.noiseKeypair.publicKey,
+		noiseKey:  tpt.noiseKeypair.publicKey[:],
 		libp2pKey: tpt.privateKey.GetPublic(),
 	}
 
@@ -71,6 +73,9 @@ func newSecureSession(tpt *Transport, ctx context.Context, insecure net.Conn, re
 	}
 
 	err := s.runHandshake(ctx)
+	if err != nil {
+		_ = s.insecure.Close()
+	}
 	return s, err
 }
 

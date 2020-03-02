@@ -4,16 +4,20 @@ import (
 	"context"
 	"fmt"
 	"github.com/gogo/protobuf/proto"
+
+	"github.com/flynn/noise"
+
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
 
 	"github.com/libp2p/go-libp2p-noise/pb"
-	"github.com/libp2p/go-libp2p-noise/xx"
 )
 
 // payloadSigPrefix is prepended to our Noise static key before signing with
 // our libp2p identity key.
 const payloadSigPrefix = "noise-libp2p-static-key:"
+
+var cipherSuite = noise.NewCipherSuite(noise.DH25519, noise.CipherChaChaPoly, noise.HashSHA256)
 
 func (s *secureSession) setRemotePeerInfo(key []byte) (err error) {
 	s.remote.libp2pKey, err = crypto.UnmarshalPublicKey(key)
@@ -25,7 +29,7 @@ func (s *secureSession) setRemotePeerID(key crypto.PubKey) (err error) {
 	return err
 }
 
-func (s *secureSession) verifyPayload(payload *pb.NoiseHandshakePayload, noiseKey [32]byte) (err error) {
+func (s *secureSession) verifyPayload(payload *pb.NoiseHandshakePayload, noiseKey []byte) (err error) {
 	sig := payload.GetIdentitySig()
 	msg := append([]byte(payloadSigPrefix), noiseKey[:]...)
 
@@ -39,47 +43,54 @@ func (s *secureSession) verifyPayload(payload *pb.NoiseHandshakePayload, noiseKe
 	return nil
 }
 
-func (s *secureSession) sendHandshakeMessage(payload []byte, initialStage bool) error {
-	var msgbuf xx.MessageBuffer
-	s.ns, msgbuf = xx.SendMessage(s.ns, payload)
-	var encMsgBuf []byte
-	if initialStage {
-		encMsgBuf = msgbuf.Encode0()
+func (s *secureSession) completeHandshake(cs1, cs2 *noise.CipherState) {
+	if s.initiator {
+		s.enc = cs1
+		s.dec = cs2
 	} else {
-		encMsgBuf = msgbuf.Encode1()
+		s.enc = cs2
+		s.dec = cs1
 	}
+	s.handshakeComplete = true
+}
 
-	err := s.writeMsgInsecure(encMsgBuf)
+func (s *secureSession) sendHandshakeMessage(payload []byte) error {
+	buf, cs1, cs2, err := s.hs.WriteMessage(nil, payload)
 	if err != nil {
-		return fmt.Errorf("sendHandshakeMessage write to conn err=%s", err)
+		return err
 	}
 
+	err = s.writeMsgInsecure(buf)
+	if err != nil {
+		return err
+	}
+
+	if cs1 != nil && cs2 != nil {
+		s.completeHandshake(cs1, cs2)
+	}
 	return nil
 }
 
-func (s *secureSession) recvHandshakeMessage(initialStage bool) (buf []byte, plaintext []byte, valid bool, err error) {
-	buf, err = s.readMsgInsecure()
+func (s *secureSession) readHandshakeMessage() ([]byte, error) {
+	raw, err := s.readMsgInsecure()
 	if err != nil {
-		return nil, nil, false, fmt.Errorf("recvHandshakeMessage read length err=%s", err)
+		return nil, err
 	}
-
-	var msgbuf *xx.MessageBuffer
-	if initialStage {
-		msgbuf, err = xx.Decode0(buf)
-	} else {
-		msgbuf, err = xx.Decode1(buf)
-	}
-
+	msg, cs1, cs2, err := s.hs.ReadMessage(nil, raw)
 	if err != nil {
-		return buf, nil, false, fmt.Errorf("recvHandshakeMessage decode msg err=%s", err)
+		return nil, err
 	}
-
-	s.ns, plaintext, valid = xx.RecvMessage(s.ns, msgbuf)
-	if !valid {
-		return buf, nil, false, fmt.Errorf("recvHandshakeMessage validation fail")
+	if cs1 != nil && cs2 != nil {
+		s.completeHandshake(cs1, cs2)
 	}
+	return msg, nil
+}
 
-	return buf, plaintext, valid, nil
+func keypairToDH(kp Keypair) noise.DHKey {
+	return noise.DHKey{
+		Private: kp.privateKey[:],
+		Public:  kp.publicKey[:],
+	}
 }
 
 // Runs the XX handshake
@@ -88,6 +99,21 @@ func (s *secureSession) recvHandshakeMessage(initialStage bool) (buf []byte, pla
 //   <- e, ee, s, es
 //   -> s, se
 func (s *secureSession) runHandshake(ctx context.Context) (err error) {
+
+	cfg := noise.Config{
+		CipherSuite:      cipherSuite,
+		Pattern:          noise.HandshakeXX,
+		Initiator:        s.initiator,
+		Prologue:         s.prologue,
+		StaticKeypair:    keypairToDH(*s.noiseKeypair),
+		EphemeralKeypair: noise.DHKey{},
+	}
+
+	hs, err := noise.NewHandshakeState(cfg)
+	if err != nil {
+		return fmt.Errorf("runHandshake err initializing handshake state: %s", err)
+	}
+	s.hs = hs
 
 	// setup libp2p keys
 	localKeyRaw, err := s.LocalPublicKey().Bytes()
@@ -111,15 +137,10 @@ func (s *secureSession) runHandshake(ctx context.Context) (err error) {
 		return fmt.Errorf("runHandshake proto marshal payload err=%s", err)
 	}
 
-	kp := xx.NewKeypair(s.noiseKeypair.publicKey, s.noiseKeypair.privateKey)
-
-	// new XX noise session
-	s.ns = xx.InitSession(s.initiator, s.prologue, kp, [32]byte{})
-
 	if s.initiator {
 		// stage 0 //
 
-		err = s.sendHandshakeMessage(nil, true)
+		err = s.sendHandshakeMessage(nil)
 		if err != nil {
 			return fmt.Errorf("runHandshake stage 0 initiator fail: %s", err)
 		}
@@ -127,19 +148,17 @@ func (s *secureSession) runHandshake(ctx context.Context) (err error) {
 		// stage 1 //
 
 		var plaintext []byte
-		var valid bool
 		// read reply
-		_, plaintext, valid, err = s.recvHandshakeMessage(false)
+		plaintext, err = s.readHandshakeMessage()
 		if err != nil {
 			return fmt.Errorf("runHandshake initiator stage 1 fail: %s", err)
 		}
-		if !valid {
-			return fmt.Errorf("runHandshake stage 1 initiator validation fail")
-		}
+
+		s.remote.noiseKey = s.hs.PeerStatic()
 
 		// stage 2 //
 
-		err = s.sendHandshakeMessage(payloadEnc, false)
+		err = s.sendHandshakeMessage(payloadEnc)
 		if err != nil {
 			return fmt.Errorf("runHandshake stage=2 initiator=true err=%s", err)
 		}
@@ -166,7 +185,7 @@ func (s *secureSession) runHandshake(ctx context.Context) (err error) {
 		}
 
 		// verify payload is signed by libp2p key
-		err = s.verifyPayload(nhp, s.ns.RemoteKey())
+		err = s.verifyPayload(nhp, s.remote.noiseKey)
 		if err != nil {
 			return fmt.Errorf("runHandshake stage=2 initiator=true verify payload err=%s", err)
 		}
@@ -176,22 +195,17 @@ func (s *secureSession) runHandshake(ctx context.Context) (err error) {
 		// stage 0 //
 
 		var plaintext []byte
-		var valid bool
 		nhp := new(pb.NoiseHandshakePayload)
 
 		// read message
-		_, plaintext, valid, err = s.recvHandshakeMessage(true)
+		plaintext, err = s.readHandshakeMessage()
 		if err != nil {
 			return fmt.Errorf("runHandshake stage=0 initiator=false err=%s", err)
 		}
 
-		if !valid {
-			return fmt.Errorf("runHandshake stage=0 initiator=false err=validation fail")
-		}
-
 		// stage 1 //
 
-		err = s.sendHandshakeMessage(payloadEnc, false)
+		err = s.sendHandshakeMessage(payloadEnc)
 		if err != nil {
 			return fmt.Errorf("runHandshake stage=1 initiator=false err=%s", err)
 		}
@@ -199,13 +213,9 @@ func (s *secureSession) runHandshake(ctx context.Context) (err error) {
 		// stage 2 //
 
 		// read message
-		_, plaintext, valid, err = s.recvHandshakeMessage(false)
+		plaintext, err = s.readHandshakeMessage()
 		if err != nil {
 			return fmt.Errorf("runHandshake stage=2 initiator=false err=%s", err)
-		}
-
-		if !valid {
-			return fmt.Errorf("runHandshake stage=2 initiator=false err=validation fail")
 		}
 
 		// unmarshal payload
@@ -226,7 +236,7 @@ func (s *secureSession) runHandshake(ctx context.Context) (err error) {
 			return fmt.Errorf("runHandshake stage=2 initiator=false set remote peer id err=%s", err)
 		}
 
-		s.remote.noiseKey = s.ns.RemoteKey()
+		s.remote.noiseKey = s.hs.PeerStatic()
 
 		// verify payload is signed by libp2p key
 		err = s.verifyPayload(nhp, s.remote.noiseKey)
@@ -235,6 +245,5 @@ func (s *secureSession) runHandshake(ctx context.Context) (err error) {
 		}
 	}
 
-	s.handshakeComplete = true
 	return nil
 }
