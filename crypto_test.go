@@ -18,12 +18,12 @@ func TestEncryptAndDecrypt_InitToResp(t *testing.T) {
 	defer respConn.Close()
 
 	plaintext := []byte("helloworld")
-	ciphertext, err := initConn.Encrypt(plaintext)
+	ciphertext, err := initConn.encrypt(plaintext)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	result, err := respConn.Decrypt(ciphertext)
+	result, err := respConn.decrypt(ciphertext)
 	if !bytes.Equal(plaintext, result) {
 		t.Fatalf("got %x expected %x", result, plaintext)
 	} else if err != nil {
@@ -31,12 +31,12 @@ func TestEncryptAndDecrypt_InitToResp(t *testing.T) {
 	}
 
 	plaintext = []byte("goodbye")
-	ciphertext, err = initConn.Encrypt(plaintext)
+	ciphertext, err = initConn.encrypt(plaintext)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	result, err = respConn.Decrypt(ciphertext)
+	result, err = respConn.decrypt(ciphertext)
 	if !bytes.Equal(plaintext, result) {
 		t.Fatalf("got %x expected %x", result, plaintext)
 	} else if err != nil {
@@ -53,12 +53,12 @@ func TestEncryptAndDecrypt_RespToInit(t *testing.T) {
 	defer respConn.Close()
 
 	plaintext := []byte("helloworld")
-	ciphertext, err := respConn.Encrypt(plaintext)
+	ciphertext, err := respConn.encrypt(plaintext)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	result, err := initConn.Decrypt(ciphertext)
+	result, err := initConn.decrypt(ciphertext)
 	if !bytes.Equal(plaintext, result) {
 		t.Fatalf("got %x expected %x", result, plaintext)
 	} else if err != nil {
@@ -75,14 +75,14 @@ func TestCryptoFailsIfCiphertextIsAltered(t *testing.T) {
 	defer respConn.Close()
 
 	plaintext := []byte("helloworld")
-	ciphertext, err := respConn.Encrypt(plaintext)
+	ciphertext, err := respConn.encrypt(plaintext)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	ciphertext[0] = ^ciphertext[0]
 
-	_, err = initConn.Decrypt(ciphertext)
+	_, err = initConn.decrypt(ciphertext)
 	if err == nil {
 		t.Fatal("expected decryption to fail when ciphertext altered")
 	}
@@ -94,11 +94,11 @@ func TestCryptoFailsIfHandshakeIncomplete(t *testing.T) {
 	_ = resp.Close()
 
 	session, _ := newSecureSession(initTransport, context.TODO(), init, "remote-peer", true)
-	_, err := session.Encrypt([]byte("hi"))
+	_, err := session.encrypt([]byte("hi"))
 	if err == nil {
 		t.Error("expected encryption error when handshake incomplete")
 	}
-	_, err = session.Decrypt([]byte("it's a secret"))
+	_, err = session.decrypt([]byte("it's a secret"))
 	if err == nil {
 		t.Error("expected decryption error when handshake incomplete")
 	}

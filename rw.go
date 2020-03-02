@@ -32,7 +32,7 @@ func (s *secureSession) Read(buf []byte) (int, error) {
 			return 0, err
 		}
 
-		plaintext, err := s.Decrypt(ciphertext)
+		plaintext, err := s.decrypt(ciphertext)
 		if err != nil {
 			return 0, err
 		}
@@ -69,7 +69,7 @@ func (s *secureSession) Write(in []byte) (int, error) {
 	defer s.writeLock.Unlock()
 
 	writeChunk := func(in []byte) (int, error) {
-		ciphertext, err := s.Encrypt(in)
+		ciphertext, err := s.encrypt(in)
 		if err != nil {
 			return 0, err
 		}

@@ -2,7 +2,7 @@ package noise
 
 import "errors"
 
-func (s *secureSession) Encrypt(plaintext []byte) (ciphertext []byte, err error) {
+func (s *secureSession) encrypt(plaintext []byte) (ciphertext []byte, err error) {
 	if s.ns.enc == nil {
 		return nil, errors.New("cannot encrypt, handshake incomplete")
 	}
@@ -12,7 +12,7 @@ func (s *secureSession) Encrypt(plaintext []byte) (ciphertext []byte, err error)
 	return ciphertext, nil
 }
 
-func (s *secureSession) Decrypt(ciphertext []byte) (plaintext []byte, err error) {
+func (s *secureSession) decrypt(ciphertext []byte) (plaintext []byte, err error) {
 	if s.ns.dec == nil {
 		return nil, errors.New("cannot decrypt, handshake incomplete")
 	}
