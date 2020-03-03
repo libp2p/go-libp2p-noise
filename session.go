@@ -7,21 +7,13 @@ import (
 	"time"
 
 	"github.com/flynn/noise"
+
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
 )
 
-type noiseState struct {
-	localStatic noise.DHKey
-
-	hs  *noise.HandshakeState
-	enc *noise.CipherState
-	dec *noise.CipherState
-}
-
 type secureSession struct {
 	initiator bool
-	ns        noiseState
 
 	localID   peer.ID
 	localKey  crypto.PrivKey
@@ -32,6 +24,9 @@ type secureSession struct {
 	msgBuffer []byte
 	readLock  sync.Mutex
 	writeLock sync.Mutex
+
+	enc *noise.CipherState
+	dec *noise.CipherState
 }
 
 // newSecureSession creates a noise session over the given insecure Conn, using the

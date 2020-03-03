@@ -3,20 +3,20 @@ package noise
 import "errors"
 
 func (s *secureSession) encrypt(plaintext []byte) (ciphertext []byte, err error) {
-	if s.ns.enc == nil {
+	if s.enc == nil {
 		return nil, errors.New("cannot encrypt, handshake incomplete")
 	}
 
 	// TODO: use pre-allocated buffers
-	ciphertext = s.ns.enc.Encrypt(nil, nil, plaintext)
+	ciphertext = s.enc.Encrypt(nil, nil, plaintext)
 	return ciphertext, nil
 }
 
 func (s *secureSession) decrypt(ciphertext []byte) (plaintext []byte, err error) {
-	if s.ns.dec == nil {
+	if s.dec == nil {
 		return nil, errors.New("cannot decrypt, handshake incomplete")
 	}
 
 	// TODO: use pre-allocated buffers
-	return s.ns.dec.Decrypt(nil, nil, ciphertext)
+	return s.dec.Decrypt(nil, nil, ciphertext)
 }
