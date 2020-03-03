@@ -2,84 +2,49 @@ package noise
 
 import (
 	"context"
-	"errors"
 	"net"
 	"sync"
 	"time"
 
-	logging "github.com/ipfs/go-log"
+	"github.com/flynn/noise"
+
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
-
-	"github.com/libp2p/go-libp2p-noise/xx"
 )
 
-var log = logging.Logger("noise")
-
-var errNoKeypair = errors.New("cannot initiate secureSession - transport has no noise keypair")
-
 type secureSession struct {
-	insecure net.Conn
-
 	initiator bool
-	prologue  []byte
 
-	localKey   crypto.PrivKey
-	localPeer  peer.ID
-	remotePeer peer.ID
+	localID   peer.ID
+	localKey  crypto.PrivKey
+	remoteID  peer.ID
+	remoteKey crypto.PubKey
 
-	local  peerInfo
-	remote peerInfo
-
-	ns *xx.NoiseSession
-
-	handshakeComplete bool
-	noiseKeypair      *Keypair
-
+	insecure  net.Conn
 	msgBuffer []byte
 	readLock  sync.Mutex
 	writeLock sync.Mutex
+
+	enc *noise.CipherState
+	dec *noise.CipherState
 }
 
-type peerInfo struct {
-	noiseKey  [32]byte // static noise public key
-	libp2pKey crypto.PubKey
-}
-
-// newSecureSession creates a noise session over the given insecure Conn, using the static
-// Noise keypair and libp2p identity keypair from the given Transport.
+// newSecureSession creates a noise session over the given insecure Conn, using the
+// libp2p identity keypair from the given Transport.
 func newSecureSession(tpt *Transport, ctx context.Context, insecure net.Conn, remote peer.ID, initiator bool) (*secureSession, error) {
-	if tpt.noiseKeypair == nil {
-		return nil, errNoKeypair
-	}
-
-	localPeerInfo := peerInfo{
-		noiseKey:  tpt.noiseKeypair.publicKey,
-		libp2pKey: tpt.privateKey.GetPublic(),
-	}
-
 	s := &secureSession{
-		insecure:     insecure,
-		initiator:    initiator,
-		prologue:     []byte{},
-		localKey:     tpt.privateKey,
-		localPeer:    tpt.localID,
-		remotePeer:   remote,
-		local:        localPeerInfo,
-		msgBuffer:    []byte{},
-		noiseKeypair: tpt.noiseKeypair,
+		insecure:  insecure,
+		initiator: initiator,
+		localID:   tpt.localID,
+		localKey:  tpt.privateKey,
+		remoteID:  remote,
 	}
 
 	err := s.runHandshake(ctx)
+	if err != nil {
+		_ = s.insecure.Close()
+	}
 	return s, err
-}
-
-func (s *secureSession) NoisePublicKey() [32]byte {
-	return s.noiseKeypair.publicKey
-}
-
-func (s *secureSession) NoisePrivateKey() [32]byte {
-	return s.noiseKeypair.privateKey
 }
 
 func (s *secureSession) LocalAddr() net.Addr {
@@ -87,7 +52,7 @@ func (s *secureSession) LocalAddr() net.Addr {
 }
 
 func (s *secureSession) LocalPeer() peer.ID {
-	return s.localPeer
+	return s.localID
 }
 
 func (s *secureSession) LocalPrivateKey() crypto.PrivKey {
@@ -103,11 +68,11 @@ func (s *secureSession) RemoteAddr() net.Addr {
 }
 
 func (s *secureSession) RemotePeer() peer.ID {
-	return s.remotePeer
+	return s.remoteID
 }
 
 func (s *secureSession) RemotePublicKey() crypto.PubKey {
-	return s.remote.libp2pKey
+	return s.remoteKey
 }
 
 func (s *secureSession) SetDeadline(t time.Time) error {

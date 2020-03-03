@@ -27,13 +27,12 @@ func (s *secureSession) Read(buf []byte) (int, error) {
 	}
 
 	readChunk := func(buf []byte) (int, error) {
-		// read length of encrypted message
 		ciphertext, err := s.readMsgInsecure()
 		if err != nil {
 			return 0, err
 		}
 
-		plaintext, err := s.Decrypt(ciphertext)
+		plaintext, err := s.decrypt(ciphertext)
 		if err != nil {
 			return 0, err
 		}
@@ -70,7 +69,7 @@ func (s *secureSession) Write(in []byte) (int, error) {
 	defer s.writeLock.Unlock()
 
 	writeChunk := func(in []byte) (int, error) {
-		ciphertext, err := s.Encrypt(in)
+		ciphertext, err := s.encrypt(in)
 		if err != nil {
 			return 0, err
 		}
@@ -105,7 +104,7 @@ func (s *secureSession) readMsgInsecure() ([]byte, error) {
 	buf := make([]byte, 2)
 	_, err := io.ReadFull(s.insecure, buf)
 	if err != nil {
-		return nil, fmt.Errorf("error reading length prefix: %s", err)
+		return nil, err
 	}
 	size := int(binary.BigEndian.Uint16(buf))
 	buf = make([]byte, size)
