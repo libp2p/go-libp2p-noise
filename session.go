@@ -29,8 +29,8 @@ type secureSession struct {
 	dec *noise.CipherState
 }
 
-// newSecureSession creates a noise session over the given insecure Conn, using the
-// libp2p identity keypair from the given Transport.
+// newSecureSession creates a Noise session over the given insecure Conn, using
+// the libp2p identity keypair from the given Transport.
 func newSecureSession(tpt *Transport, ctx context.Context, insecure net.Conn, remote peer.ID, initiator bool) (*secureSession, error) {
 	s := &secureSession{
 		insecure:  insecure,

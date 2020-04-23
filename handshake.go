@@ -23,7 +23,7 @@ var cipherSuite = noise.NewCipherSuite(noise.DH25519, noise.CipherChaChaPoly, no
 
 // runHandshake exchanges handshake messages with the remote peer to establish
 // a noise-libp2p session. It blocks until the handshake completes or fails.
-func (s *secureSession) runHandshake(_ context.Context) error {
+func (s *secureSession) runHandshake(ctx context.Context) error {
 	kp, err := noise.DH25519.GenerateKeypair(rand.Reader)
 	if err != nil {
 		return fmt.Errorf("error generating static keypair: %w", err)
@@ -48,6 +48,7 @@ func (s *secureSession) runHandshake(_ context.Context) error {
 
 	if s.initiator {
 		// stage 0 //
+		// do not send the payload just yet, as it would be plaintext; not secret.
 		err = s.sendHandshakeMessage(hs, nil)
 		if err != nil {
 			return fmt.Errorf("error sending handshake message: %w", err)
@@ -95,9 +96,10 @@ func (s *secureSession) runHandshake(_ context.Context) error {
 	return nil
 }
 
-// setCipherStates is called when the final handshake message is processed by
+// setCipherStates sets the initial cipher states that will be used to protect traffic after the handshake.
+//
+// It is called when the final handshake message is processed by
 // either sendHandshakeMessage or readHandshakeMessage.
-// It sets the initial cipher states that will be used to protect traffic after the handshake.
 func (s *secureSession) setCipherStates(cs1, cs2 *noise.CipherState) {
 	if s.initiator {
 		s.enc = cs1
@@ -109,6 +111,7 @@ func (s *secureSession) setCipherStates(cs1, cs2 *noise.CipherState) {
 }
 
 // sendHandshakeMessage sends the next handshake message in the sequence.
+//
 // If payload is non-empty, it will be included in the handshake message.
 // If this is the final message in the sequence, calls setCipherStates
 // to initialize cipher states.
@@ -131,8 +134,10 @@ func (s *secureSession) sendHandshakeMessage(hs *noise.HandshakeState, payload [
 
 // readHandshakeMessage reads a message from the insecure conn and tries to
 // process it as the expected next message in the handshake sequence.
+//
 // If the message contains a payload, it will be decrypted and returned.
-// If this is the final message in the sequence, calls setCipherStates
+//
+// If this is the final message in the sequence, it calls setCipherStates
 // to initialize cipher states.
 func (s *secureSession) readHandshakeMessage(hs *noise.HandshakeState) ([]byte, error) {
 	raw, err := s.readMsgInsecure()
@@ -152,13 +157,14 @@ func (s *secureSession) readHandshakeMessage(hs *noise.HandshakeState) ([]byte, 
 // generateHandshakePayload creates a libp2p handshake payload with a
 // signature of our static noise key.
 func (s *secureSession) generateHandshakePayload(localStatic noise.DHKey) ([]byte, error) {
-	// setup libp2p keys
+	// obtain the public key from the handshake session so we can sign it with
+	// our libp2p secret key.
 	localKeyRaw, err := s.LocalPublicKey().Bytes()
 	if err != nil {
 		return nil, fmt.Errorf("error serializing libp2p identity key: %w", err)
 	}
 
-	// sign noise data for payload
+	// prepare payload to sign; perform signature.
 	toSign := append([]byte(payloadSigPrefix), localStatic.Public...)
 	signedPayload, err := s.localKey.Sign(toSign)
 	if err != nil {
@@ -198,10 +204,11 @@ func (s *secureSession) handleRemoteHandshakePayload(payload []byte, remoteStati
 
 	// if we know who we're trying to reach, make sure we have the right peer
 	if s.initiator && s.remoteID != id {
-		return fmt.Errorf("peer id mismatch: expected %s, but remote key matches %s", s.remoteID, id)
+		// use Pretty() as it produces the full b58-encoded string, rather than abbreviated forms.
+		return fmt.Errorf("peer id mismatch: expected %s, but remote key matches %s", s.remoteID.Pretty(), id.Pretty())
 	}
 
-	// verify payload is signed by libp2p key
+	// verify payload is signed by asserted remote libp2p key.
 	sig := nhp.GetIdentitySig()
 	msg := append([]byte(payloadSigPrefix), remoteStatic...)
 	ok, err := remotePubKey.Verify(msg, sig)
