@@ -119,7 +119,7 @@ func (s *secureSession) writeMsgInsecure(data []byte) error {
 	binary.BigEndian.PutUint16(buf, uint16(len(data)))
 	_, err := s.insecure.Write(buf)
 	if err != nil {
-		return fmt.Errorf("error writing length prefix: %s", err)
+		return fmt.Errorf("error writing length prefix: %w", err)
 	}
 	_, err = s.insecure.Write(data)
 	return err

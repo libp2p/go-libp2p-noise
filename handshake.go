@@ -23,10 +23,10 @@ var cipherSuite = noise.NewCipherSuite(noise.DH25519, noise.CipherChaChaPoly, no
 
 // runHandshake exchanges handshake messages with the remote peer to establish
 // a noise-libp2p session. It blocks until the handshake completes or fails.
-func (s *secureSession) runHandshake(ctx context.Context) error {
+func (s *secureSession) runHandshake(_ context.Context) error {
 	kp, err := noise.DH25519.GenerateKeypair(rand.Reader)
 	if err != nil {
-		return fmt.Errorf("error generating static keypair: %s", err)
+		return fmt.Errorf("error generating static keypair: %w", err)
 	}
 
 	cfg := noise.Config{
@@ -38,7 +38,7 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 
 	hs, err := noise.NewHandshakeState(cfg)
 	if err != nil {
-		return fmt.Errorf("error initializing handshake state: %s", err)
+		return fmt.Errorf("error initializing handshake state: %w", err)
 	}
 
 	payload, err := s.generateHandshakePayload(kp)
@@ -50,13 +50,13 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 		// stage 0 //
 		err = s.sendHandshakeMessage(hs, nil)
 		if err != nil {
-			return fmt.Errorf("error sending handshake message: %s", err)
+			return fmt.Errorf("error sending handshake message: %w", err)
 		}
 
 		// stage 1 //
 		plaintext, err := s.readHandshakeMessage(hs)
 		if err != nil {
-			return fmt.Errorf("error reading handshake message: %s", err)
+			return fmt.Errorf("error reading handshake message: %w", err)
 		}
 		err = s.handleRemoteHandshakePayload(plaintext, hs.PeerStatic())
 		if err != nil {
@@ -66,25 +66,25 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 		// stage 2 //
 		err = s.sendHandshakeMessage(hs, payload)
 		if err != nil {
-			return fmt.Errorf("error sending handshake message: %s", err)
+			return fmt.Errorf("error sending handshake message: %w", err)
 		}
 	} else {
 		// stage 0 //
 		plaintext, err := s.readHandshakeMessage(hs)
 		if err != nil {
-			return fmt.Errorf("error reading handshake message: %s", err)
+			return fmt.Errorf("error reading handshake message: %w", err)
 		}
 
 		// stage 1 //
 		err = s.sendHandshakeMessage(hs, payload)
 		if err != nil {
-			return fmt.Errorf("error sending handshake message: %s", err)
+			return fmt.Errorf("error sending handshake message: %w", err)
 		}
 
 		// stage 2 //
 		plaintext, err = s.readHandshakeMessage(hs)
 		if err != nil {
-			return fmt.Errorf("error reading handshake message: %s", err)
+			return fmt.Errorf("error reading handshake message: %w", err)
 		}
 		err = s.handleRemoteHandshakePayload(plaintext, hs.PeerStatic())
 		if err != nil {
@@ -155,14 +155,14 @@ func (s *secureSession) generateHandshakePayload(localStatic noise.DHKey) ([]byt
 	// setup libp2p keys
 	localKeyRaw, err := s.LocalPublicKey().Bytes()
 	if err != nil {
-		return nil, fmt.Errorf("error serializing libp2p identity key: %s", err)
+		return nil, fmt.Errorf("error serializing libp2p identity key: %w", err)
 	}
 
 	// sign noise data for payload
 	toSign := append([]byte(payloadSigPrefix), localStatic.Public...)
 	signedPayload, err := s.localKey.Sign(toSign)
 	if err != nil {
-		return nil, fmt.Errorf("error sigining handshake payload: %s", err)
+		return nil, fmt.Errorf("error sigining handshake payload: %w", err)
 	}
 
 	// create payload
@@ -171,7 +171,7 @@ func (s *secureSession) generateHandshakePayload(localStatic noise.DHKey) ([]byt
 	payload.IdentitySig = signedPayload
 	payloadEnc, err := proto.Marshal(payload)
 	if err != nil {
-		return nil, fmt.Errorf("error marshaling handshake payload: %s", err)
+		return nil, fmt.Errorf("error marshaling handshake payload: %w", err)
 	}
 	return payloadEnc, nil
 }
@@ -183,7 +183,7 @@ func (s *secureSession) handleRemoteHandshakePayload(payload []byte, remoteStati
 	nhp := new(pb.NoiseHandshakePayload)
 	err := proto.Unmarshal(payload, nhp)
 	if err != nil {
-		return fmt.Errorf("error unmarshaling remote handshake payload: %s", err)
+		return fmt.Errorf("error unmarshaling remote handshake payload: %w", err)
 	}
 
 	// unpack remote peer's public libp2p key
@@ -206,7 +206,7 @@ func (s *secureSession) handleRemoteHandshakePayload(payload []byte, remoteStati
 	msg := append([]byte(payloadSigPrefix), remoteStatic...)
 	ok, err := remotePubKey.Verify(msg, sig)
 	if err != nil {
-		return fmt.Errorf("error verifying signature: %s", err)
+		return fmt.Errorf("error verifying signature: %w", err)
 	} else if !ok {
 		return fmt.Errorf("handshake signature invalid")
 	}
