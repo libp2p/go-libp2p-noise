@@ -50,7 +50,7 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 	// set a deadline to complete the handshake, if one has been supplied.
 	// clear it after we're done.
 	if deadline, ok := ctx.Deadline(); ok {
-		s.SetDeadline(deadline)
+		_ = s.SetDeadline(deadline)
 		defer s.SetDeadline(time.Time{})
 	}
 
@@ -104,7 +104,8 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 	return nil
 }
 
-// setCipherStates sets the initial cipher states that will be used to protect traffic after the handshake.
+// setCipherStates sets the initial cipher states that will be used to protect
+// traffic after the handshake.
 //
 // It is called when the final handshake message is processed by
 // either sendHandshakeMessage or readHandshakeMessage.
@@ -129,7 +130,7 @@ func (s *secureSession) sendHandshakeMessage(hs *noise.HandshakeState, payload [
 		return err
 	}
 
-	err = s.writeMsgInsecure(buf)
+	_, err = s.writeMsgInsecure(buf)
 	if err != nil {
 		return err
 	}

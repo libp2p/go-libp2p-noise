@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"math/rand"
 	"net"
 	"testing"
@@ -201,7 +202,7 @@ func TestLargePayloads(t *testing.T) {
 	}
 
 	after := make([]byte, len(before))
-	afterLen, err := respConn.Read(after)
+	afterLen, err := io.ReadFull(respConn, after)
 	if err != nil {
 		t.Fatal(err)
 	}

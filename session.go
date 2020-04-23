@@ -20,10 +20,17 @@ type secureSession struct {
 	remoteID  peer.ID
 	remoteKey crypto.PubKey
 
-	insecure  net.Conn
-	msgBuffer []byte
 	readLock  sync.Mutex
 	writeLock sync.Mutex
+	insecure  net.Conn
+	// queued bytes seek value.
+	qseek int
+	// queued bytes remaining; saves us from computing over and over.
+	qrem int
+	// queued bytes buffer.
+	qbuf []byte
+	// work buffers for read and write message lengths (16 bits each); guarded by locks.
+	rlen, wlen []byte
 
 	enc *noise.CipherState
 	dec *noise.CipherState
@@ -38,6 +45,8 @@ func newSecureSession(tpt *Transport, ctx context.Context, insecure net.Conn, re
 		localID:   tpt.localID,
 		localKey:  tpt.privateKey,
 		remoteID:  remote,
+		rlen:      make([]byte, 2),
+		wlen:      make([]byte, 2),
 	}
 
 	err := s.runHandshake(ctx)
