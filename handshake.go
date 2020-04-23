@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
+	"time"
 
 	"github.com/flynn/noise"
 	"github.com/gogo/protobuf/proto"
@@ -44,6 +45,13 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 	payload, err := s.generateHandshakePayload(kp)
 	if err != nil {
 		return err
+	}
+
+	// set a deadline to complete the handshake, if one has been supplied.
+	// clear it after we're done.
+	if deadline, ok := ctx.Deadline(); ok {
+		s.SetDeadline(deadline)
+		defer s.SetDeadline(time.Time{})
 	}
 
 	if s.initiator {

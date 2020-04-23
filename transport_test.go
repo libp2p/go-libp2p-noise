@@ -3,9 +3,11 @@ package noise
 import (
 	"bytes"
 	"context"
+	"errors"
 	"math/rand"
 	"net"
 	"testing"
+	"time"
 
 	crypto "github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -84,6 +86,28 @@ func connect(t *testing.T, initTransport, respTransport *Transport) (*secureSess
 	}
 
 	return initConn.(*secureSession), respConn.(*secureSession)
+}
+
+func TestDeadlines(t *testing.T) {
+	initTransport := newTestTransport(t, crypto.Ed25519, 2048)
+	respTransport := newTestTransport(t, crypto.Ed25519, 2048)
+
+	init, resp := newConnPair(t)
+	defer init.Close()
+	defer resp.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	_, err := initTransport.SecureOutbound(ctx, init, respTransport.localID)
+	if err == nil {
+		t.Fatalf("expected i/o timeout err; got: %s", err)
+	}
+
+	var neterr net.Error
+	if ok := errors.As(err, &neterr); !ok || !neterr.Timeout() {
+		t.Fatalf("expected i/o timeout err; got: %s", err)
+	}
 }
 
 func TestIDs(t *testing.T) {
