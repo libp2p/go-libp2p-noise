@@ -25,12 +25,12 @@ func (s *secureSession) Read(buf []byte) (int, error) {
 	defer s.readLock.Unlock()
 
 	// 1. If we have queued received bytes:
-	//   1a. If cap(buf) < len(queued), saturate buf, update seek pointer, return.
-	//   1b. If cap(buf) >= len(queued), copy to buf, release queued into pool, return.
+	//   1a. If len(buf) < len(queued), saturate buf, update seek pointer, return.
+	//   1b. If len(buf) >= len(queued), copy remaining to buf, release queued buffer back into pool, return.
 	//
 	// 2. Else, read the next message off the wire; next_len is length prefix.
-	//   2a. If len(buf) >= next_len, copy the message over and return.
-	//   2b. If len(buf) < next_len, copy as many bytes as possible, obtain buf from pool, stash remaining with seek=0.
+	//   2a. If len(buf) >= next_len, copy the message to input buffer (zero-alloc path), and return.
+	//   2b. If len(buf) < next_len, obtain buffer from pool, copy entire message into it, saturate buf, update seek pointer.
 	var copied int
 	if s.qbuf != nil {
 		// we have queued bytes; copy as much as we can.
@@ -40,54 +40,55 @@ func (s *secureSession) Read(buf []byte) (int, error) {
 			pool.Put(s.qbuf)
 			s.qseek, s.qrem, s.qbuf = 0, 0, nil
 		} else {
-			// we copied less than we had.
+			// we copied less than we had; update seek and rem.
 			s.qseek, s.qrem = s.qseek+copied, s.qrem-copied
 		}
 		return copied, nil
 	}
 
-	ciphertext, err := s.readMsgInsecure()
+	// cbuf is the ciphertext buffer.
+	cbuf, err := s.readMsgInsecure()
 	if err != nil {
 		return 0, err
 	}
-	defer pool.Put(ciphertext)
+	defer pool.Put(cbuf)
 
 	// plen is the payload length: the transport message size minus the authentication tag.
-	plen := len(ciphertext) - poly1305.TagSize
+	plen := len(cbuf) - poly1305.TagSize
 
 	// if the reader is willing to read at least as many bytes as we are receiving,
-	// decrypt the message directly into the buffer.
+	// decrypt the message directly into the buffer (zero-alloc path).
 	if len(buf) >= plen {
-		if _, err := s.decrypt(buf[:0], ciphertext); err != nil {
+		if _, err := s.decrypt(buf[:0], cbuf); err != nil {
 			return 0, err
 		}
 		return plen, nil
 	}
 
-	// otherwise, get a buffer from the pool so we can stash the queued payload.
+	// otherwise, get a buffer from the pool so we can stash the payload.
 	s.qbuf = pool.Get(plen)
-	plaintext, err := s.decrypt(s.qbuf[:0], ciphertext)
-	if err != nil {
+	if _, err = s.decrypt(s.qbuf[:0], cbuf); err != nil {
 		return 0, err
 	}
 
-	copied = copy(buf, plaintext)
+	// copy as many bytes as we can.
+	copied = copy(buf, s.qbuf)
 
-	// we have to queue the remaining bytes.
+	// update seek and remaining pointers.
 	s.qseek, s.qrem = copied, plen-copied
 	return copied, nil
 }
 
 // Write encrypts the plaintext `in` data and sends it on the
 // secure connection.
-func (s *secureSession) Write(in []byte) (int, error) {
+func (s *secureSession) Write(buf []byte) (int, error) {
 	s.writeLock.Lock()
 	defer s.writeLock.Unlock()
 
 	var (
 		written int
 		cbuf    []byte
-		total   = len(in)
+		total   = len(buf)
 	)
 
 	if total < MaxPlaintextLength {
@@ -103,7 +104,7 @@ func (s *secureSession) Write(in []byte) (int, error) {
 			end = total
 		}
 
-		b, err := s.encrypt(cbuf[:0], in[written:end])
+		b, err := s.encrypt(cbuf[:0], buf[written:end])
 		if err != nil {
 			return 0, err
 		}
