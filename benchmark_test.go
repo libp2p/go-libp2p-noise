@@ -124,6 +124,10 @@ func pipeRandom(src rand.Source, w io.WriteCloser, r io.Reader, n int64) error {
 func benchDataTransfer(b *benchenv, size int64) {
 	var totalBytes int64
 	var totalTime time.Duration
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
 	for i := 0; i < b.N; i++ {
 		initSession, respSession := b.connect(true)
 
@@ -153,6 +157,9 @@ func BenchmarkTransfer500Mb(b *testing.B) {
 }
 
 func (b benchenv) benchHandshake() {
+	b.ResetTimer()
+	b.ReportAllocs()
+
 	for i := 0; i < b.N; i++ {
 		i, r := b.connect(false)
 		b.StopTimer()
