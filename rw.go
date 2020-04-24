@@ -11,11 +11,15 @@ import (
 
 // MaxTransportMsgLength is the Noise-imposed maximum transport message length,
 // inclusive of the MAC size (16 bytes, Poly1305 for noise-libp2p).
-const MaxTransportMsgLength = 65535
+const MaxTransportMsgLength = 0xffff
 
 // MaxPlaintextLength is the maximum payload size. It is MaxTransportMsgLength
 // minus the MAC size. Payloads over this size will be automatically chunked.
 const MaxPlaintextLength = MaxTransportMsgLength - poly1305.TagSize
+
+// LengthPrefixLength is the length of the length prefix itself, which precedes
+// all transport messages in order to delimit them. In bytes.
+const LengthPrefixLength = 2
 
 // Read reads from the secure connection, returning plaintext data in `buf`.
 //
@@ -134,12 +138,19 @@ func (s *secureSession) readMsgInsecure() ([]byte, error) {
 
 // writeMsgInsecure writes to the insecure conn.
 // data will be prefixed with its length in bytes, written as a 16-bit uint in network order.
-func (s *secureSession) writeMsgInsecure(data []byte) (n int, err error) {
-	binary.BigEndian.PutUint16(s.wlen, uint16(len(data)))
-	n, err = s.insecure.Write(s.wlen)
-	if err != nil {
-		return n, fmt.Errorf("error writing length prefix: %w", err)
+func (s *secureSession) writeMsgInsecure(data []byte) (int, error) {
+	// we rather stage the length-prefixed write in a buffer to then call Write
+	// on the underlying transport at once, rather than Write twice and likely
+	// induce transport-level fragmentation.
+	l := len(data)
+	buf := pool.Get(LengthPrefixLength + l)
+	defer pool.Put(buf)
+
+	// length-prefix || data
+	binary.BigEndian.PutUint16(buf, uint16(l))
+	n := copy(buf[LengthPrefixLength:], data)
+	if n != l {
+		return 0, fmt.Errorf("assertion failed during noise secure channel write; expected to copy %d bytes, copied: %d", l, n)
 	}
-	n, err = s.insecure.Write(data)
-	return n + 2, err // +2 for length prefix.
+	return s.insecure.Write(buf)
 }
