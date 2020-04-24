@@ -4,17 +4,18 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
+	"io"
+	"io/ioutil"
+	mrand "math/rand"
+	"testing"
+	"time"
+
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/host"
 	net "github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	ma "github.com/multiformats/go-multiaddr"
-	"io"
-	"io/ioutil"
-	mrand "math/rand"
-	"testing"
-	"time"
 )
 
 const testProtocolID = "/test/noise/integration"
@@ -65,22 +66,38 @@ func makeNode(t *testing.T, seed int64, port int) (host.Host, error) {
 func TestLibp2pIntegration(t *testing.T) {
 	ctx := context.Background()
 
-	ha, err := makeNode(t, 1, 33333)
+	ha, err := makeNode(t, 1, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	defer ha.Close()
 
-	hb, err := makeNode(t, 2, 34343)
+	hb, err := makeNode(t, 2, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	defer hb.Close()
 
-	ha.SetStreamHandler(testProtocolID, streamHandler(t))
-	hb.SetStreamHandler(testProtocolID, streamHandler(t))
+	doneCh := make(chan struct{})
+
+	// hb reads.
+	hb.SetStreamHandler(testProtocolID, func(stream net.Stream) {
+		defer func() {
+			if err := stream.Close(); err != nil {
+				t.Error("error closing stream: ", err)
+			}
+			close(doneCh)
+		}()
+
+		start := time.Now()
+		c, err := io.Copy(ioutil.Discard, stream)
+		elapsed := time.Since(start)
+		if err != nil {
+			t.Error("error reading from stream: ", err)
+			return
+		}
+		t.Logf("read %d bytes in %dms", c, elapsed.Milliseconds())
+	})
 
 	addr, err := ma.NewMultiaddr(fmt.Sprintf("%s/p2p/%s", hb.Addrs()[0].String(), hb.ID()))
 	if err != nil {
@@ -99,6 +116,7 @@ func TestLibp2pIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// ha writes.
 	stream, err := ha.NewStream(ctx, hb.ID(), testProtocolID)
 	if err != nil {
 		t.Fatal(err)
@@ -109,9 +127,8 @@ func TestLibp2pIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	<-doneCh
 	fmt.Println("fin")
-
-	time.Sleep(time.Second)
 }
 
 func writeRandomPayloadAndClose(t *testing.T, stream net.Stream) error {
@@ -123,29 +140,9 @@ func writeRandomPayloadAndClose(t *testing.T, stream net.Stream) error {
 
 	c, err := io.Copy(stream, lr)
 	elapsed := time.Since(start)
+	t.Logf("wrote %d bytes in %dms", c, elapsed.Milliseconds())
 	if err != nil {
 		return fmt.Errorf("failed to write out bytes: %v", err)
 	}
-	t.Logf("wrote %d bytes in %dms", c, elapsed.Milliseconds())
 	return stream.Close()
-}
-
-func streamHandler(t *testing.T) func(net.Stream) {
-	return func(stream net.Stream) {
-		t.Helper()
-		defer func() {
-			if err := stream.Close(); err != nil {
-				t.Error("error closing stream: ", err)
-			}
-		}()
-
-		start := time.Now()
-		c, err := io.Copy(ioutil.Discard, stream)
-		elapsed := time.Since(start)
-		if err != nil {
-			t.Error("error reading from stream: ", err)
-			return
-		}
-		t.Logf("read %d bytes in %dms", c, elapsed.Milliseconds())
-	}
 }

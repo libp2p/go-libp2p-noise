@@ -35,12 +35,12 @@ func New(privkey crypto.PrivKey) (*Transport, error) {
 	}, nil
 }
 
-// SecureInbound runs noise handshake as the responder
+// SecureInbound runs the Noise handshake as the responder.
 func (t *Transport) SecureInbound(ctx context.Context, insecure net.Conn) (sec.SecureConn, error) {
 	return newSecureSession(t, ctx, insecure, "", false)
 }
 
-// SecureOutbound runs noise handshake as the initiator
+// SecureOutbound runs the Noise handshake as the initiator.
 func (t *Transport) SecureOutbound(ctx context.Context, insecure net.Conn, p peer.ID) (sec.SecureConn, error) {
 	return newSecureSession(t, ctx, insecure, p, true)
 }

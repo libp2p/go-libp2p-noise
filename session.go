@@ -20,17 +20,20 @@ type secureSession struct {
 	remoteID  peer.ID
 	remoteKey crypto.PubKey
 
-	insecure  net.Conn
-	msgBuffer []byte
 	readLock  sync.Mutex
 	writeLock sync.Mutex
+	insecure  net.Conn
+
+	qseek int     // queued bytes seek value.
+	qbuf  []byte  // queued bytes buffer.
+	rlen  [2]byte // work buffer to read in the incoming message length.
 
 	enc *noise.CipherState
 	dec *noise.CipherState
 }
 
-// newSecureSession creates a noise session over the given insecure Conn, using the
-// libp2p identity keypair from the given Transport.
+// newSecureSession creates a Noise session over the given insecure Conn, using
+// the libp2p identity keypair from the given Transport.
 func newSecureSession(tpt *Transport, ctx context.Context, insecure net.Conn, remote peer.ID, initiator bool) (*secureSession, error) {
 	s := &secureSession{
 		insecure:  insecure,

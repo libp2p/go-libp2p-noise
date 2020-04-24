@@ -4,95 +4,112 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+
+	pool "github.com/libp2p/go-buffer-pool"
+	"golang.org/x/crypto/poly1305"
 )
 
-// Each encrypted transport message must be <= 65,535 bytes, including 16
-// bytes of authentication data. To write larger plaintexts, we split them
-// into fragments of maxPlaintextLength before encrypting.
-const maxPlaintextLength = 65519
+// MaxTransportMsgLength is the Noise-imposed maximum transport message length,
+// inclusive of the MAC size (16 bytes, Poly1305 for noise-libp2p).
+const MaxTransportMsgLength = 0xffff
 
-// Read reads from the secure connection, filling `buf` with plaintext data.
-// May read less than len(buf) if data is available immediately.
+// MaxPlaintextLength is the maximum payload size. It is MaxTransportMsgLength
+// minus the MAC size. Payloads over this size will be automatically chunked.
+const MaxPlaintextLength = MaxTransportMsgLength - poly1305.TagSize
+
+// LengthPrefixLength is the length of the length prefix itself, which precedes
+// all transport messages in order to delimit them. In bytes.
+const LengthPrefixLength = 2
+
+// Read reads from the secure connection, returning plaintext data in `buf`.
+//
+// Honours io.Reader in terms of behaviour.
 func (s *secureSession) Read(buf []byte) (int, error) {
 	s.readLock.Lock()
 	defer s.readLock.Unlock()
 
-	l := len(buf)
-
-	// if we have previously unread bytes, and they fit into the buf, copy them over and return
-	if l <= len(s.msgBuffer) {
-		copy(buf, s.msgBuffer)
-		s.msgBuffer = s.msgBuffer[l:]
-		return l, nil
+	// 1. If we have queued received bytes:
+	//   1a. If len(buf) < len(queued), saturate buf, update seek pointer, return.
+	//   1b. If len(buf) >= len(queued), copy remaining to buf, release queued buffer back into pool, return.
+	//
+	// 2. Else, read the next message off the wire; next_len is length prefix.
+	//   2a. If len(buf) >= next_len, copy the message to input buffer (zero-alloc path), and return.
+	//   2b. If len(buf) < next_len, obtain buffer from pool, copy entire message into it, saturate buf, update seek pointer.
+	if s.qbuf != nil {
+		// we have queued bytes; copy as much as we can.
+		copied := copy(buf, s.qbuf[s.qseek:])
+		s.qseek += copied
+		if s.qseek == len(s.qbuf) {
+			// queued buffer is now empty, reset and release.
+			pool.Put(s.qbuf)
+			s.qseek, s.qbuf = 0, nil
+		}
+		return copied, nil
 	}
 
-	readChunk := func(buf []byte) (int, error) {
-		ciphertext, err := s.readMsgInsecure()
-		if err != nil {
+	// cbuf is the ciphertext buffer.
+	cbuf, err := s.readMsgInsecure()
+	if err != nil {
+		return 0, err
+	}
+
+	// plen is the payload length: the transport message size minus the authentication tag.
+	// if the reader is willing to read at least as many bytes as we are receiving,
+	// decrypt the message directly into the buffer (zero-alloc path).
+	if plen := len(cbuf) - poly1305.TagSize; len(buf) >= plen {
+		defer pool.Put(cbuf)
+		if _, err := s.decrypt(buf[:0], cbuf); err != nil {
 			return 0, err
 		}
-
-		plaintext, err := s.decrypt(ciphertext)
-		if err != nil {
-			return 0, err
-		}
-
-		// append plaintext to message buffer, copy over what can fit in the buf
-		// then advance message buffer to remove what was copied
-		s.msgBuffer = append(s.msgBuffer, plaintext...)
-		c := copy(buf, s.msgBuffer)
-		s.msgBuffer = s.msgBuffer[c:]
-		return c, nil
+		return plen, nil
 	}
 
-	total := 0
-	for i := 0; i < len(buf); i += maxPlaintextLength {
-		end := i + maxPlaintextLength
-		if end > len(buf) {
-			end = len(buf)
-		}
-
-		c, err := readChunk(buf[i:end])
-		total += c
-		if err != nil {
-			return total, err
-		}
+	// otherwise, get a buffer from the pool so we can stash the payload.
+	// we decrypt in place, since we're retaining cbuf (or a vew thereof).
+	if s.qbuf, err = s.decrypt(cbuf[:0], cbuf); err != nil {
+		return 0, err
 	}
 
-	return total, nil
+	// copy as many bytes as we can; update seek pointer.
+	s.qseek = copy(buf, s.qbuf)
+	return s.qseek, nil
 }
 
 // Write encrypts the plaintext `in` data and sends it on the
 // secure connection.
-func (s *secureSession) Write(in []byte) (int, error) {
+func (s *secureSession) Write(data []byte) (int, error) {
 	s.writeLock.Lock()
 	defer s.writeLock.Unlock()
 
-	writeChunk := func(in []byte) (int, error) {
-		ciphertext, err := s.encrypt(in)
-		if err != nil {
-			return 0, err
-		}
+	var (
+		written int
+		cbuf    []byte
+		total   = len(data)
+	)
 
-		err = s.writeMsgInsecure(ciphertext)
-		if err != nil {
-			return 0, err
-		}
-		return len(in), err
+	if total < MaxPlaintextLength {
+		cbuf = pool.Get(total + poly1305.TagSize)
+	} else {
+		cbuf = pool.Get(MaxTransportMsgLength)
 	}
+	defer pool.Put(cbuf)
 
-	written := 0
-	for i := 0; i < len(in); i += maxPlaintextLength {
-		end := i + maxPlaintextLength
-		if end > len(in) {
-			end = len(in)
+	for written < total {
+		end := written + MaxPlaintextLength
+		if end > total {
+			end = total
 		}
 
-		l, err := writeChunk(in[i:end])
-		written += l
+		b, err := s.encrypt(cbuf[:0], data[written:end])
+		if err != nil {
+			return 0, err
+		}
+
+		_, err = s.writeMsgInsecure(b)
 		if err != nil {
 			return written, err
 		}
+		written = end
 	}
 	return written, nil
 }
@@ -101,26 +118,31 @@ func (s *secureSession) Write(in []byte) (int, error) {
 // it first reads the message length, then consumes that many bytes
 // from the insecure conn.
 func (s *secureSession) readMsgInsecure() ([]byte, error) {
-	buf := make([]byte, 2)
-	_, err := io.ReadFull(s.insecure, buf)
+	_, err := io.ReadFull(s.insecure, s.rlen[:])
 	if err != nil {
 		return nil, err
 	}
-	size := int(binary.BigEndian.Uint16(buf))
-	buf = make([]byte, size)
+	size := int(binary.BigEndian.Uint16(s.rlen[:]))
+	buf := pool.Get(size)
 	_, err = io.ReadFull(s.insecure, buf)
 	return buf, err
 }
 
 // writeMsgInsecure writes to the insecure conn.
 // data will be prefixed with its length in bytes, written as a 16-bit uint in network order.
-func (s *secureSession) writeMsgInsecure(data []byte) error {
-	buf := make([]byte, 2)
-	binary.BigEndian.PutUint16(buf, uint16(len(data)))
-	_, err := s.insecure.Write(buf)
-	if err != nil {
-		return fmt.Errorf("error writing length prefix: %s", err)
+func (s *secureSession) writeMsgInsecure(data []byte) (int, error) {
+	// we rather stage the length-prefixed write in a buffer to then call Write
+	// on the underlying transport at once, rather than Write twice and likely
+	// induce transport-level fragmentation.
+	l := len(data)
+	buf := pool.Get(LengthPrefixLength + l)
+	defer pool.Put(buf)
+
+	// length-prefix || data
+	binary.BigEndian.PutUint16(buf, uint16(l))
+	n := copy(buf[LengthPrefixLength:], data)
+	if n != l {
+		return 0, fmt.Errorf("assertion failed during noise secure channel write; expected to copy %d bytes, copied: %d", l, n)
 	}
-	_, err = s.insecure.Write(data)
-	return err
+	return s.insecure.Write(buf)
 }
