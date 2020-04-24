@@ -35,17 +35,13 @@ func (s *secureSession) Read(buf []byte) (int, error) {
 	// 2. Else, read the next message off the wire; next_len is length prefix.
 	//   2a. If len(buf) >= next_len, copy the message to input buffer (zero-alloc path), and return.
 	//   2b. If len(buf) < next_len, obtain buffer from pool, copy entire message into it, saturate buf, update seek pointer.
-	var copied int
 	if s.qbuf != nil {
 		// we have queued bytes; copy as much as we can.
-		copied = copy(buf, s.qbuf[s.qseek:])
-		if copied == s.qrem {
+		copied := copy(buf, s.qbuf[s.qseek:])
+		if s.qseek += copied; s.qseek == len(s.qbuf) {
 			// queued buffer is now empty, reset and release.
 			pool.Put(s.qbuf)
-			s.qseek, s.qrem, s.qbuf = 0, 0, nil
-		} else {
-			// we copied less than we had; update seek and rem.
-			s.qseek, s.qrem = s.qseek+copied, s.qrem-copied
+			s.qseek, s.qbuf = 0, nil
 		}
 		return copied, nil
 	}
@@ -75,12 +71,9 @@ func (s *secureSession) Read(buf []byte) (int, error) {
 		return 0, err
 	}
 
-	// copy as many bytes as we can.
-	copied = copy(buf, s.qbuf)
-
-	// update seek and remaining pointers.
-	s.qseek, s.qrem = copied, plen-copied
-	return copied, nil
+	// copy as many bytes as we can; update seek pointer.
+	s.qseek = copy(buf, s.qbuf)
+	return s.qseek, nil
 }
 
 // Write encrypts the plaintext `in` data and sends it on the

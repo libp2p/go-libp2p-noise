@@ -25,7 +25,6 @@ type secureSession struct {
 	insecure  net.Conn
 
 	qseek int    // queued bytes seek value.
-	qrem  int    // queued bytes remaining; saves us from computing over and over.
 	qbuf  []byte // queued bytes buffer.
 	rlen  []byte // work buffer to read in the incoming message length (2 bytes).
 
