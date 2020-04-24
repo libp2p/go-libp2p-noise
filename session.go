@@ -24,9 +24,9 @@ type secureSession struct {
 	writeLock sync.Mutex
 	insecure  net.Conn
 
-	qseek int    // queued bytes seek value.
-	qbuf  []byte // queued bytes buffer.
-	rlen  []byte // work buffer to read in the incoming message length (2 bytes).
+	qseek int     // queued bytes seek value.
+	qbuf  []byte  // queued bytes buffer.
+	rlen  [2]byte // work buffer to read in the incoming message length.
 
 	enc *noise.CipherState
 	dec *noise.CipherState
@@ -41,7 +41,6 @@ func newSecureSession(tpt *Transport, ctx context.Context, insecure net.Conn, re
 		localID:   tpt.localID,
 		localKey:  tpt.privateKey,
 		remoteID:  remote,
-		rlen:      make([]byte, 2),
 	}
 
 	err := s.runHandshake(ctx)

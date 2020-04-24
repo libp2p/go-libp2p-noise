@@ -38,7 +38,8 @@ func (s *secureSession) Read(buf []byte) (int, error) {
 	if s.qbuf != nil {
 		// we have queued bytes; copy as much as we can.
 		copied := copy(buf, s.qbuf[s.qseek:])
-		if s.qseek += copied; s.qseek == len(s.qbuf) {
+		s.qseek += copied
+		if s.qseek == len(s.qbuf) {
 			// queued buffer is now empty, reset and release.
 			pool.Put(s.qbuf)
 			s.qseek, s.qbuf = 0, nil
@@ -117,11 +118,11 @@ func (s *secureSession) Write(data []byte) (int, error) {
 // it first reads the message length, then consumes that many bytes
 // from the insecure conn.
 func (s *secureSession) readMsgInsecure() ([]byte, error) {
-	_, err := io.ReadFull(s.insecure, s.rlen)
+	_, err := io.ReadFull(s.insecure, s.rlen[:])
 	if err != nil {
 		return nil, err
 	}
-	size := int(binary.BigEndian.Uint16(s.rlen))
+	size := int(binary.BigEndian.Uint16(s.rlen[:]))
 	buf := pool.Get(size)
 	_, err = io.ReadFull(s.insecure, buf)
 	return buf, err
