@@ -50,8 +50,13 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 	// set a deadline to complete the handshake, if one has been supplied.
 	// clear it after we're done.
 	if deadline, ok := ctx.Deadline(); ok {
-		_ = s.SetDeadline(deadline)
-		defer s.SetDeadline(time.Time{})
+		if err := s.SetDeadline(deadline); err == nil {
+			// schedule the deadline removal once we're done handshaking.
+			defer s.SetDeadline(time.Time{})
+		}
+		// TODO: else case (transport doesn't support native timeouts); spin off
+		//  a goroutine to monitor the context cancellation and pull the rug
+		//  from under by closing the connection altogether.
 	}
 
 	if s.initiator {
