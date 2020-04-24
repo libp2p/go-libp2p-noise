@@ -76,14 +76,14 @@ func (s *secureSession) Read(buf []byte) (int, error) {
 
 // Write encrypts the plaintext `in` data and sends it on the
 // secure connection.
-func (s *secureSession) Write(buf []byte) (int, error) {
+func (s *secureSession) Write(data []byte) (int, error) {
 	s.writeLock.Lock()
 	defer s.writeLock.Unlock()
 
 	var (
 		written int
 		cbuf    []byte
-		total   = len(buf)
+		total   = len(data)
 	)
 
 	if total < MaxPlaintextLength {
@@ -99,7 +99,7 @@ func (s *secureSession) Write(buf []byte) (int, error) {
 			end = total
 		}
 
-		b, err := s.encrypt(cbuf[:0], buf[written:end])
+		b, err := s.encrypt(cbuf[:0], data[written:end])
 		if err != nil {
 			return 0, err
 		}
