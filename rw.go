@@ -51,14 +51,12 @@ func (s *secureSession) Read(buf []byte) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer pool.Put(cbuf)
 
 	// plen is the payload length: the transport message size minus the authentication tag.
-	plen := len(cbuf) - poly1305.TagSize
-
 	// if the reader is willing to read at least as many bytes as we are receiving,
 	// decrypt the message directly into the buffer (zero-alloc path).
-	if len(buf) >= plen {
+	if plen := len(cbuf) - poly1305.TagSize; len(buf) >= plen {
+		defer pool.Put(cbuf)
 		if _, err := s.decrypt(buf[:0], cbuf); err != nil {
 			return 0, err
 		}
@@ -66,8 +64,8 @@ func (s *secureSession) Read(buf []byte) (int, error) {
 	}
 
 	// otherwise, get a buffer from the pool so we can stash the payload.
-	s.qbuf = pool.Get(plen)
-	if _, err = s.decrypt(s.qbuf[:0], cbuf); err != nil {
+	// we decrypt in place, since we're retaining cbuf (or a vew thereof).
+	if s.qbuf, err = s.decrypt(cbuf[:0], cbuf); err != nil {
 		return 0, err
 	}
 
