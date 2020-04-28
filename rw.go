@@ -47,25 +47,35 @@ func (s *secureSession) Read(buf []byte) (int, error) {
 		return copied, nil
 	}
 
-	// cbuf is the ciphertext buffer.
-	cbuf, err := s.readMsgInsecure()
+	// length of the next encrypted message.
+	nextMsgLen, err := s.readNextInsecureMsgLen()
 	if err != nil {
 		return 0, err
 	}
 
-	// plen is the payload length: the transport message size minus the authentication tag.
 	// if the reader is willing to read at least as many bytes as we are receiving,
-	// decrypt the message directly into the buffer (zero-alloc path).
-	if plen := len(cbuf) - poly1305.TagSize; len(buf) >= plen {
-		defer pool.Put(cbuf)
-		if _, err := s.decrypt(buf[:0], cbuf); err != nil {
+	// read the message directly into the buffer AND then decrypt the message directly into the buffer (zero-alloc path).
+	if len(buf) >= nextMsgLen {
+		if err := s.readNextMsgInsecure(buf[:nextMsgLen]); err != nil {
 			return 0, err
 		}
-		return plen, nil
+
+		if _, err := s.decrypt(buf[:0], buf[:nextMsgLen]); err != nil {
+			return 0, err
+		}
+
+		// the actual number of bytes read into buf is the length of the transport message
+		// minus the length of the authentication tag.
+		return nextMsgLen - poly1305.TagSize, nil
 	}
 
-	// otherwise, get a buffer from the pool so we can stash the payload.
-	// we decrypt in place, since we're retaining cbuf (or a vew thereof).
+	// otherwise, we get a buffer from the pool so we can read the message into it
+	// and then decrypt in place, since we're retaining the buffer (or a view thereof).
+	cbuf := pool.Get(nextMsgLen)
+	if err := s.readNextMsgInsecure(cbuf); err != nil {
+		return 0, err
+	}
+
 	if s.qbuf, err = s.decrypt(cbuf[:0], cbuf); err != nil {
 		return 0, err
 	}
@@ -114,18 +124,24 @@ func (s *secureSession) Write(data []byte) (int, error) {
 	return written, nil
 }
 
-// readMsgInsecure reads a message from the insecure channel.
-// it first reads the message length, then consumes that many bytes
-// from the insecure conn.
-func (s *secureSession) readMsgInsecure() ([]byte, error) {
+// readNextInsecureMsgLen reads the length of the next message on the insecure channel.
+func (s *secureSession) readNextInsecureMsgLen() (int, error) {
 	_, err := io.ReadFull(s.insecure, s.rlen[:])
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
-	size := int(binary.BigEndian.Uint16(s.rlen[:]))
-	buf := pool.Get(size)
-	_, err = io.ReadFull(s.insecure, buf)
-	return buf, err
+
+	return int(binary.BigEndian.Uint16(s.rlen[:])), err
+}
+
+// readNextMsgInsecure tries to read exactly len(buf) bytes into buf from
+// the insecure channel and returns the error, if any.
+// Ideally, for reading a message, you'd first want to call `readNextInsecureMsgLen`
+// to determine the size of the next message to be read from the insecure channel and then call
+// this function with a buffer of exactly that size.
+func (s *secureSession) readNextMsgInsecure(buf []byte) error {
+	_, err := io.ReadFull(s.insecure, buf)
+	return err
 }
 
 // writeMsgInsecure writes to the insecure conn.

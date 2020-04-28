@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
+	pool "github.com/libp2p/go-buffer-pool"
 	"time"
 
 	"github.com/flynn/noise"
@@ -54,9 +55,6 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 			// schedule the deadline removal once we're done handshaking.
 			defer s.SetDeadline(time.Time{})
 		}
-		// TODO: else case (transport doesn't support native timeouts); spin off
-		//  a goroutine to monitor the context cancellation and pull the rug
-		//  from under by closing the connection altogether.
 	}
 
 	if s.initiator {
@@ -154,11 +152,19 @@ func (s *secureSession) sendHandshakeMessage(hs *noise.HandshakeState, payload [
 // If this is the final message in the sequence, it calls setCipherStates
 // to initialize cipher states.
 func (s *secureSession) readHandshakeMessage(hs *noise.HandshakeState) ([]byte, error) {
-	raw, err := s.readMsgInsecure()
+	l, err := s.readNextInsecureMsgLen()
 	if err != nil {
 		return nil, err
 	}
-	msg, cs1, cs2, err := hs.ReadMessage(nil, raw)
+
+	buf := pool.Get(l)
+	defer pool.Put(buf)
+
+	if err := s.readNextMsgInsecure(buf); err != nil {
+		return nil, err
+	}
+
+	msg, cs1, cs2, err := hs.ReadMessage(nil, buf)
 	if err != nil {
 		return nil, err
 	}

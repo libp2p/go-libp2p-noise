@@ -43,11 +43,28 @@ func newSecureSession(tpt *Transport, ctx context.Context, insecure net.Conn, re
 		remoteID:  remote,
 	}
 
-	err := s.runHandshake(ctx)
-	if err != nil {
+	// the go-routine we create to run the handshake will
+	// write the result of the handshake to the respCh.
+	respCh := make(chan error, 1)
+	go func() {
+		respCh <- s.runHandshake(ctx)
+	}()
+
+	select {
+	case err := <-respCh:
+		if err != nil {
+			_ = s.insecure.Close()
+		}
+		return s, err
+
+	case <-ctx.Done():
+		// If the context has been cancelled, we close the underlying connection.
+		// We then wait for the handshake to return because of the first error it encounters
+		// so we don't return without cleaning up the go-routine.
 		_ = s.insecure.Close()
+		<-respCh
+		return nil, ctx.Err()
 	}
-	return s, err
 }
 
 func (s *secureSession) LocalAddr() net.Addr {
