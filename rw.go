@@ -2,11 +2,10 @@ package noise
 
 import (
 	"encoding/binary"
-	"fmt"
+	"golang.org/x/crypto/poly1305"
 	"io"
 
 	pool "github.com/libp2p/go-buffer-pool"
-	"golang.org/x/crypto/poly1305"
 )
 
 // MaxTransportMsgLength is the Noise-imposed maximum transport message length,
@@ -101,6 +100,7 @@ func (s *secureSession) Read(buf []byte) (int, error) {
 
 	// copy as many bytes as we can; update seek pointer.
 	s.qseek = copy(buf, s.qbuf)
+
 	return s.qseek, nil
 }
 
@@ -117,10 +117,11 @@ func (s *secureSession) Write(data []byte) (int, error) {
 	)
 
 	if total < MaxPlaintextLength {
-		cbuf = pool.Get(total + poly1305.TagSize)
+		cbuf = pool.Get(total + poly1305.TagSize + LengthPrefixLength)
 	} else {
-		cbuf = pool.Get(MaxTransportMsgLength)
+		cbuf = pool.Get(MaxTransportMsgLength + LengthPrefixLength)
 	}
+
 	defer pool.Put(cbuf)
 
 	for written < total {
@@ -134,7 +135,11 @@ func (s *secureSession) Write(data []byte) (int, error) {
 			return 0, err
 		}
 
-		_, err = s.writeMsgInsecure(b)
+		copy(cbuf[LengthPrefixLength:], b)
+
+		binary.BigEndian.PutUint16(cbuf, uint16(len(b)))
+
+		_, err = s.writeMsgInsecure(cbuf[0 : len(b)+LengthPrefixLength])
 		if err != nil {
 			return written, err
 		}
@@ -166,18 +171,5 @@ func (s *secureSession) readNextMsgInsecure(buf []byte) error {
 // writeMsgInsecure writes to the insecure conn.
 // data will be prefixed with its length in bytes, written as a 16-bit uint in network order.
 func (s *secureSession) writeMsgInsecure(data []byte) (int, error) {
-	// we rather stage the length-prefixed write in a buffer to then call Write
-	// on the underlying transport at once, rather than Write twice and likely
-	// induce transport-level fragmentation.
-	l := len(data)
-	buf := pool.Get(LengthPrefixLength + l)
-	defer pool.Put(buf)
-
-	// length-prefix || data
-	binary.BigEndian.PutUint16(buf, uint16(l))
-	n := copy(buf[LengthPrefixLength:], data)
-	if n != l {
-		return 0, fmt.Errorf("assertion failed during noise secure channel write; expected to copy %d bytes, copied: %d", l, n)
-	}
-	return s.insecure.Write(buf)
+	return s.insecure.Write(data)
 }

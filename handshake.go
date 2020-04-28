@@ -3,6 +3,7 @@ package noise
 import (
 	"context"
 	"crypto/rand"
+	"encoding/binary"
 	"fmt"
 	pool "github.com/libp2p/go-buffer-pool"
 	"time"
@@ -133,7 +134,13 @@ func (s *secureSession) sendHandshakeMessage(hs *noise.HandshakeState, payload [
 		return err
 	}
 
-	_, err = s.writeMsgInsecure(buf)
+	bz := pool.Get(LengthPrefixLength + len(buf))
+	defer pool.Put(bz)
+
+	binary.BigEndian.PutUint16(bz, uint16(len(buf)))
+	copy(bz[LengthPrefixLength:], buf)
+
+	_, err = s.writeMsgInsecure(bz)
 	if err != nil {
 		return err
 	}
