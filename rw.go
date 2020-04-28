@@ -34,7 +34,9 @@ func (s *secureSession) Read(buf []byte) (int, error) {
 	//
 	// 2. Else, read the next message off the wire; next_len is length prefix.
 	//   2a. If len(buf) >= next_len, copy the message to input buffer (zero-alloc path), and return.
-	//   2b. If len(buf) < next_len, obtain buffer from pool, copy entire message into it, saturate buf, update seek pointer.
+	//   2b. If len(buf) >= (next_len - length of Authentication Tag), get buffer from pool, read encrypted message into it.
+	//       decrypt message directly into the input buffer and return the buffer obtained from the pool.
+	//   2c. If len(buf) < next_len, obtain buffer from pool, copy entire message into it, saturate buf, update seek pointer.
 	if s.qbuf != nil {
 		// we have queued bytes; copy as much as we can.
 		copied := copy(buf, s.qbuf[s.qseek:])
