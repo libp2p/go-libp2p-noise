@@ -53,19 +53,36 @@ func (s *secureSession) Read(buf []byte) (int, error) {
 		return 0, err
 	}
 
-	// if the reader is willing to read at least as many bytes as we are receiving,
-	// read the message directly into the buffer AND then decrypt the message directly into the buffer (zero-alloc path).
-	if len(buf) >= nextMsgLen {
-		if err := s.readNextMsgInsecure(buf[:nextMsgLen]); err != nil {
+	// If the buffer is atleast as big as the decrypted message size,
+	// we can surely decrypt in place.
+	if len(buf) >= nextMsgLen-poly1305.TagSize {
+		var toDecrypt []byte
+
+		// If the buffer is atleast as big as the encrypted message, we can
+		// read the message directly into the buffer and then decrypt in place.
+		if len(buf) >= nextMsgLen {
+			if err := s.readNextMsgInsecure(buf[:nextMsgLen]); err != nil {
+				return 0, err
+			}
+			toDecrypt = buf[:nextMsgLen]
+		} else {
+			// Since the buffer is not big enough for the encrypted message,
+			// we need to get one from the pool.
+			cbuf := pool.Get(nextMsgLen)
+			defer pool.Put(cbuf)
+			if err := s.readNextMsgInsecure(cbuf); err != nil {
+				return 0, err
+			}
+			toDecrypt = cbuf
+		}
+
+		// decrypt the message directly into the buffer since we know the buffer is atleast that big.
+		// This will avoid a copy from `cbuf` into buf for the else case above.
+		_, err := s.decrypt(buf[:0], toDecrypt)
+		if err != nil {
 			return 0, err
 		}
 
-		if _, err := s.decrypt(buf[:0], buf[:nextMsgLen]); err != nil {
-			return 0, err
-		}
-
-		// the actual number of bytes read into buf is the length of the transport message
-		// minus the length of the authentication tag.
 		return nextMsgLen - poly1305.TagSize, nil
 	}
 
