@@ -2,15 +2,35 @@ package noise
 
 import (
 	"context"
-	"github.com/libp2p/go-libp2p-core/crypto"
-	"github.com/libp2p/go-libp2p-core/sec"
+	"golang.org/x/crypto/poly1305"
 	"io"
 	"io/ioutil"
 	"math/rand"
 	"net"
 	"testing"
 	"time"
+
+	"github.com/libp2p/go-libp2p-core/crypto"
+	"github.com/libp2p/go-libp2p-core/sec"
 )
+
+var bcs = map[string]struct {
+	plainTextChunkLen int64
+	readBufferLen     int64
+}{
+	"readBuffer > encrypted message": {
+		plainTextChunkLen: 32 * 1024,
+		readBufferLen:     (32 * 1024) + poly1305.TagSize,
+	},
+	"readBuffer > decrypted plaintext": {
+		plainTextChunkLen: 32 * 1024,
+		readBufferLen:     (32 * 1024) + poly1305.TagSize - 2,
+	},
+	"readBuffer < decrypted plaintext": {
+		plainTextChunkLen: 32 * 1024,
+		readBufferLen:     8 * 1024,
+	},
+}
 
 func makeTransport(b *testing.B) *Transport {
 	b.Helper()
@@ -78,28 +98,48 @@ func (b benchenv) connect(stopTimer bool) (*secureSession, *secureSession) {
 	return initSession.(*secureSession), respSession.(*secureSession)
 }
 
-func drain(r io.Reader, done chan<- error) {
-	_, err := io.Copy(ioutil.Discard, r)
+func drain(r io.Reader, done chan<- error, buf []byte) {
+	_, err := io.Copy(&discardWithBuffer{buf, ioutil.Discard}, r)
 	done <- err
 }
 
-func sink(dst io.WriteCloser, src io.Reader, done chan<- error) {
-	_, err := io.Copy(dst, src)
+type discardWithBuffer struct {
+	buf []byte
+	io.Writer
+}
+
+func (d *discardWithBuffer) ReadFrom(r io.Reader) (n int64, err error) {
+	readSize := 0
+	for {
+		readSize, err = r.Read(d.buf)
+		n += int64(readSize)
+		if err != nil {
+			if err == io.EOF {
+				return n, nil
+			}
+			return
+		}
+	}
+}
+
+func sink(dst io.WriteCloser, src io.Reader, done chan<- error, buf []byte) {
+	_, err := io.CopyBuffer(dst, src, buf)
 	if err != nil {
 		done <- err
 	}
 	done <- dst.Close()
 }
 
-func pipeRandom(src rand.Source, w io.WriteCloser, r io.Reader, n int64) error {
+func pipeRandom(src rand.Source, w io.WriteCloser, r io.Reader, n int64, writeBuffer,
+	readBuffer []byte) error {
 	rnd := rand.New(src)
 	lr := io.LimitReader(rnd, n)
 
 	writeCh := make(chan error, 1)
 	readCh := make(chan error, 1)
 
-	go sink(w, lr, writeCh)
-	go drain(r, readCh)
+	go sink(w, lr, writeCh, writeBuffer)
+	go drain(r, readCh, readBuffer)
 
 	writeDone := false
 	readDone := false
@@ -121,7 +161,7 @@ func pipeRandom(src rand.Source, w io.WriteCloser, r io.Reader, n int64) error {
 	return nil
 }
 
-func benchDataTransfer(b *benchenv, size int64) {
+func benchDataTransfer(b *benchenv, dataSize int64, writeBuffer []byte, readBuffer []byte) {
 	var totalBytes int64
 	var totalTime time.Duration
 
@@ -132,28 +172,49 @@ func benchDataTransfer(b *benchenv, size int64) {
 		initSession, respSession := b.connect(true)
 
 		start := time.Now()
-		err := pipeRandom(b.rndSrc, initSession, respSession, size)
+		err := pipeRandom(b.rndSrc, initSession, respSession, dataSize, writeBuffer, readBuffer)
 		if err != nil {
 			b.Fatalf("error sending random data: %s", err)
 		}
 		elapsed := time.Since(start)
 		totalTime += elapsed
-		totalBytes += size
+		totalBytes += dataSize
 	}
 	bytesPerSec := float64(totalBytes) / totalTime.Seconds()
 	b.ReportMetric(bytesPerSec, "bytes/sec")
 }
 
+type bc struct {
+	plainTextChunkLen int64
+	readBufferLen     int64
+}
+
 func BenchmarkTransfer1MB(b *testing.B) {
-	benchDataTransfer(setupEnv(b), 1024*1024)
+	for n, bc := range bcs {
+		b.Run(n, func(b *testing.B) {
+			benchDataTransfer(setupEnv(b), 1024*1024, make([]byte, bc.plainTextChunkLen),
+				make([]byte, bc.readBufferLen))
+		})
+	}
+
 }
 
 func BenchmarkTransfer100MB(b *testing.B) {
-	benchDataTransfer(setupEnv(b), 1024*1024*100)
+	for n, bc := range bcs {
+		b.Run(n, func(b *testing.B) {
+			benchDataTransfer(setupEnv(b), 1024*1024*100, make([]byte, bc.plainTextChunkLen),
+				make([]byte, bc.readBufferLen))
+		})
+	}
 }
 
 func BenchmarkTransfer500Mb(b *testing.B) {
-	benchDataTransfer(setupEnv(b), 1024*1024*500)
+	for n, bc := range bcs {
+		b.Run(n, func(b *testing.B) {
+			benchDataTransfer(setupEnv(b), 1024*1024*500, make([]byte, bc.plainTextChunkLen),
+				make([]byte, bc.readBufferLen))
+		})
+	}
 }
 
 func (b benchenv) benchHandshake() {
