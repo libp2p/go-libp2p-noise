@@ -14,21 +14,25 @@ import (
 	"github.com/libp2p/go-libp2p-core/sec"
 )
 
+type testMode int
+
+const (
+	readBufferGtEncMsg testMode = iota
+	readBufferGtPlainText
+	readBufferLtPlainText
+)
+
 var bcs = map[string]struct {
-	plainTextChunkLen int64
-	readBufferLen     int64
+	m testMode
 }{
 	"readBuffer > encrypted message": {
-		plainTextChunkLen: 32 * 1024,
-		readBufferLen:     (32 * 1024) + poly1305.TagSize,
+		readBufferGtEncMsg,
 	},
 	"readBuffer > decrypted plaintext": {
-		plainTextChunkLen: 32 * 1024,
-		readBufferLen:     (32 * 1024) + poly1305.TagSize - 2,
+		readBufferGtPlainText,
 	},
 	"readBuffer < decrypted plaintext": {
-		plainTextChunkLen: 32 * 1024,
-		readBufferLen:     8 * 1024,
+		readBufferLtPlainText,
 	},
 }
 
@@ -161,7 +165,19 @@ func pipeRandom(src rand.Source, w io.WriteCloser, r io.Reader, n int64, writeBu
 	return nil
 }
 
-func benchDataTransfer(b *benchenv, dataSize int64, writeBuffer []byte, readBuffer []byte) {
+func minimum(a, b int) int {
+	if a <= b {
+		return a
+	}
+
+	return b
+}
+
+func randInRange(min, max int) int {
+	return rand.Intn(max-min) + min
+}
+
+func benchDataTransfer(b *benchenv, dataSize int64, m testMode) {
 	var totalBytes int64
 	var totalTime time.Duration
 
@@ -171,8 +187,21 @@ func benchDataTransfer(b *benchenv, dataSize int64, writeBuffer []byte, readBuff
 	for i := 0; i < b.N; i++ {
 		initSession, respSession := b.connect(true)
 
+		b.StopTimer()
+		var rbuf []byte
+		wbuf := make([]byte, randInRange(2*1024, 63*1024))
+		switch m {
+		case readBufferGtEncMsg:
+			rbuf = make([]byte, randInRange(len(wbuf)+poly1305.TagSize, len(wbuf)+poly1305.TagSize+1000))
+		case readBufferGtPlainText:
+			rbuf = make([]byte, randInRange(len(wbuf), len(wbuf)+poly1305.TagSize))
+		case readBufferLtPlainText:
+			rbuf = make([]byte, randInRange(1*1024, len(wbuf)))
+		}
+		b.StartTimer()
+
 		start := time.Now()
-		err := pipeRandom(b.rndSrc, initSession, respSession, dataSize, writeBuffer, readBuffer)
+		err := pipeRandom(b.rndSrc, initSession, respSession, dataSize, wbuf, rbuf)
 		if err != nil {
 			b.Fatalf("error sending random data: %s", err)
 		}
@@ -192,8 +221,7 @@ type bc struct {
 func BenchmarkTransfer1MB(b *testing.B) {
 	for n, bc := range bcs {
 		b.Run(n, func(b *testing.B) {
-			benchDataTransfer(setupEnv(b), 1024*1024, make([]byte, bc.plainTextChunkLen),
-				make([]byte, bc.readBufferLen))
+			benchDataTransfer(setupEnv(b), 1024*1024, bc.m)
 		})
 	}
 
@@ -202,8 +230,7 @@ func BenchmarkTransfer1MB(b *testing.B) {
 func BenchmarkTransfer100MB(b *testing.B) {
 	for n, bc := range bcs {
 		b.Run(n, func(b *testing.B) {
-			benchDataTransfer(setupEnv(b), 1024*1024*100, make([]byte, bc.plainTextChunkLen),
-				make([]byte, bc.readBufferLen))
+			benchDataTransfer(setupEnv(b), 1024*1024*100, bc.m)
 		})
 	}
 }
@@ -211,8 +238,7 @@ func BenchmarkTransfer100MB(b *testing.B) {
 func BenchmarkTransfer500Mb(b *testing.B) {
 	for n, bc := range bcs {
 		b.Run(n, func(b *testing.B) {
-			benchDataTransfer(setupEnv(b), 1024*1024*500, make([]byte, bc.plainTextChunkLen),
-				make([]byte, bc.readBufferLen))
+			benchDataTransfer(setupEnv(b), 1024*1024*500, bc.m)
 		})
 	}
 }
