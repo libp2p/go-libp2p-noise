@@ -181,27 +181,31 @@ func benchDataTransfer(b *benchenv, dataSize int64, m testMode) {
 	var totalBytes int64
 	var totalTime time.Duration
 
+	plainTextBufs := make([][]byte, 62)
+	rbufs := make(map[int][]byte)
+	for i := 0; i < len(plainTextBufs); i++ {
+		// plaintext will be 2 KB to 63 KB
+		plainTextBufs[i] = make([]byte, (i+2)*1024)
+		switch m {
+		case readBufferGtEncMsg:
+			rbufs[i] = make([]byte, len(plainTextBufs[i])+poly1305.TagSize+1)
+		case readBufferGtPlainText:
+			rbufs[i] = make([]byte, len(plainTextBufs[i])+1)
+		case readBufferLtPlainText:
+			rbufs[i] = make([]byte, len(plainTextBufs[i])-2)
+		}
+	}
+
 	b.ResetTimer()
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
 		initSession, respSession := b.connect(true)
 
-		b.StopTimer()
-		var rbuf []byte
-		plainTextBuf := make([]byte, randInRange(2*1024, 63*1024))
-		switch m {
-		case readBufferGtEncMsg:
-			rbuf = make([]byte, len(plainTextBuf)+poly1305.TagSize+1)
-		case readBufferGtPlainText:
-			rbuf = make([]byte, len(plainTextBuf)+1)
-		case readBufferLtPlainText:
-			rbuf = make([]byte, len(plainTextBuf)-2)
-		}
-		b.StartTimer()
-
 		start := time.Now()
-		err := pipeRandom(b.rndSrc, initSession, respSession, dataSize, plainTextBuf, rbuf)
+
+		bufi := i % len(plainTextBufs)
+		err := pipeRandom(b.rndSrc, initSession, respSession, dataSize, plainTextBufs[bufi], rbufs[bufi])
 		if err != nil {
 			b.Fatalf("error sending random data: %s", err)
 		}
