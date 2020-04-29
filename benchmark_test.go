@@ -189,19 +189,19 @@ func benchDataTransfer(b *benchenv, dataSize int64, m testMode) {
 
 		b.StopTimer()
 		var rbuf []byte
-		wbuf := make([]byte, randInRange(2*1024, 63*1024))
+		plainTextBuf := make([]byte, randInRange(2*1024, 63*1024))
 		switch m {
 		case readBufferGtEncMsg:
-			rbuf = make([]byte, randInRange(len(wbuf)+poly1305.TagSize, len(wbuf)+poly1305.TagSize+1000))
+			rbuf = make([]byte, len(plainTextBuf)+poly1305.TagSize+1)
 		case readBufferGtPlainText:
-			rbuf = make([]byte, randInRange(len(wbuf), len(wbuf)+poly1305.TagSize))
+			rbuf = make([]byte, len(plainTextBuf)+1)
 		case readBufferLtPlainText:
-			rbuf = make([]byte, randInRange(1*1024, len(wbuf)))
+			rbuf = make([]byte, len(plainTextBuf)-2)
 		}
 		b.StartTimer()
 
 		start := time.Now()
-		err := pipeRandom(b.rndSrc, initSession, respSession, dataSize, wbuf, rbuf)
+		err := pipeRandom(b.rndSrc, initSession, respSession, dataSize, plainTextBuf, rbuf)
 		if err != nil {
 			b.Fatalf("error sending random data: %s", err)
 		}
