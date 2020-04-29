@@ -12,6 +12,3 @@ require (
 	github.com/stretchr/testify v1.5.1
 	golang.org/x/crypto v0.0.0-20200423211502-4bdfaf469ed5
 )
-
-
-replace github.com/libp2p/go-buffer-pool => /Users/aarshshah/go/src/github.com/libp2p/go-buffer-pool
