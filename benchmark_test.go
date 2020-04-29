@@ -181,10 +181,10 @@ func benchDataTransfer(b *benchenv, dataSize int64, m testMode) {
 	var totalBytes int64
 	var totalTime time.Duration
 
-	plainTextBufs := make([][]byte, 62)
+	plainTextBufs := make([][]byte, 61)
 	rbufs := make(map[int][]byte)
 	for i := 0; i < len(plainTextBufs); i++ {
-		// plaintext will be 2 KB to 63 KB
+		// plaintext will be 2 KB to 62 KB
 		plainTextBufs[i] = make([]byte, (i+2)*1024)
 		switch m {
 		case readBufferGtEncMsg:
