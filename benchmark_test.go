@@ -102,8 +102,8 @@ func (b benchenv) connect(stopTimer bool) (*secureSession, *secureSession) {
 	return initSession.(*secureSession), respSession.(*secureSession)
 }
 
-func drain(r io.Reader, done chan<- error, buf []byte) {
-	_, err := io.Copy(&discardWithBuffer{buf, ioutil.Discard}, r)
+func drain(r io.Reader, done chan<- error, writeTo io.Writer) {
+	_, err := io.Copy(writeTo, r)
 	done <- err
 }
 
@@ -134,16 +134,16 @@ func sink(dst io.WriteCloser, src io.Reader, done chan<- error, buf []byte) {
 	done <- dst.Close()
 }
 
-func pipeRandom(src rand.Source, w io.WriteCloser, r io.Reader, n int64, writeBuffer,
-	readBuffer []byte) error {
+func pipeRandom(src rand.Source, w io.WriteCloser, r io.Reader, n int64, plainTextBuf []byte,
+	writeTo io.Writer) error {
 	rnd := rand.New(src)
 	lr := io.LimitReader(rnd, n)
 
 	writeCh := make(chan error, 1)
 	readCh := make(chan error, 1)
 
-	go sink(w, lr, writeCh, writeBuffer)
-	go drain(r, readCh, readBuffer)
+	go sink(w, lr, writeCh, plainTextBuf)
+	go drain(r, readCh, writeTo)
 
 	writeDone := false
 	readDone := false
@@ -165,35 +165,25 @@ func pipeRandom(src rand.Source, w io.WriteCloser, r io.Reader, n int64, writeBu
 	return nil
 }
 
-func minimum(a, b int) int {
-	if a <= b {
-		return a
-	}
-
-	return b
-}
-
-func randInRange(min, max int) int {
-	return rand.Intn(max-min) + min
-}
-
 func benchDataTransfer(b *benchenv, dataSize int64, m testMode) {
 	var totalBytes int64
 	var totalTime time.Duration
 
 	plainTextBufs := make([][]byte, 61)
-	rbufs := make(map[int][]byte)
+	writeTos := make(map[int]io.Writer)
 	for i := 0; i < len(plainTextBufs); i++ {
+		var rbuf []byte
 		// plaintext will be 2 KB to 62 KB
 		plainTextBufs[i] = make([]byte, (i+2)*1024)
 		switch m {
 		case readBufferGtEncMsg:
-			rbufs[i] = make([]byte, len(plainTextBufs[i])+poly1305.TagSize+1)
+			rbuf = make([]byte, len(plainTextBufs[i])+poly1305.TagSize+1)
 		case readBufferGtPlainText:
-			rbufs[i] = make([]byte, len(plainTextBufs[i])+1)
+			rbuf = make([]byte, len(plainTextBufs[i])+1)
 		case readBufferLtPlainText:
-			rbufs[i] = make([]byte, len(plainTextBufs[i])-2)
+			rbuf = make([]byte, len(plainTextBufs[i])-2)
 		}
+		writeTos[i] = &discardWithBuffer{rbuf, ioutil.Discard}
 	}
 
 	b.ResetTimer()
@@ -205,7 +195,7 @@ func benchDataTransfer(b *benchenv, dataSize int64, m testMode) {
 		start := time.Now()
 
 		bufi := i % len(plainTextBufs)
-		err := pipeRandom(b.rndSrc, initSession, respSession, dataSize, plainTextBufs[bufi], rbufs[bufi])
+		err := pipeRandom(b.rndSrc, initSession, respSession, dataSize, plainTextBufs[bufi], writeTos[bufi])
 		if err != nil {
 			b.Fatalf("error sending random data: %s", err)
 		}
