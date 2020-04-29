@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"golang.org/x/crypto/poly1305"
 	"io"
 	"math/rand"
 	"net"
@@ -243,7 +244,7 @@ func TestHandshakeXX(t *testing.T) {
 	}
 }
 
-func TestLargerBufferThanPayload(t *testing.T) {
+func TestBufferEqEncPayload(t *testing.T) {
 	initTransport := newTestTransport(t, crypto.Ed25519, 2048)
 	respTransport := newTestTransport(t, crypto.Ed25519, 2048)
 
@@ -255,12 +256,30 @@ func TestLargerBufferThanPayload(t *testing.T) {
 	_, err := initConn.Write(before)
 	require.NoError(t, err)
 
-	after := make([]byte, len(before)+2)
+	after := make([]byte, len(before)+poly1305.TagSize)
 	afterLen, err := respConn.Read(after)
 	require.NoError(t, err)
 
 	require.Equal(t, len(before), afterLen)
 	require.Equal(t, before, after[:len(before)])
-	// all bytes after the payload should be empty
-	require.Equal(t, []byte{0, 0}, after[len(before):])
+}
+
+func TestBufferEqDecryptedPayload(t *testing.T) {
+	initTransport := newTestTransport(t, crypto.Ed25519, 2048)
+	respTransport := newTestTransport(t, crypto.Ed25519, 2048)
+
+	initConn, respConn := connect(t, initTransport, respTransport)
+	defer initConn.Close()
+	defer respConn.Close()
+
+	before := []byte("hello world")
+	_, err := initConn.Write(before)
+	require.NoError(t, err)
+
+	after := make([]byte, len(before)+1)
+	afterLen, err := respConn.Read(after)
+	require.NoError(t, err)
+
+	require.Equal(t, len(before), afterLen)
+	require.Equal(t, before, after[:len(before)])
 }
