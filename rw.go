@@ -54,32 +54,14 @@ func (s *secureSession) Read(buf []byte) (int, error) {
 		return 0, err
 	}
 
-	// If the buffer is atleast as big as the decrypted message size,
-	// we can surely decrypt in place.
-	if len(buf) >= nextMsgLen-poly1305.TagSize {
-		var toDecrypt []byte
-
-		// If the buffer is atleast as big as the encrypted message, we can
-		// read the message directly into the buffer and then decrypt in place.
-		if len(buf) >= nextMsgLen {
-			if err := s.readNextMsgInsecure(buf[:nextMsgLen]); err != nil {
-				return 0, err
-			}
-			toDecrypt = buf[:nextMsgLen]
-		} else {
-			// Since the buffer is not big enough for the encrypted message,
-			// we need to get one from the pool.
-			cbuf := pool.Get(nextMsgLen)
-			defer pool.Put(cbuf)
-			if err := s.readNextMsgInsecure(cbuf); err != nil {
-				return 0, err
-			}
-			toDecrypt = cbuf
+	// If the buffer is atleast as big as the encrypted message size,
+	// we can read AND decrypt in place.
+	if len(buf) >= nextMsgLen {
+		if err := s.readNextMsgInsecure(buf[:nextMsgLen]); err != nil {
+			return 0, err
 		}
 
-		// decrypt the message directly into the buffer since we know the buffer is atleast that big.
-		// This will avoid a copy from `cbuf` into buf for the else case above.
-		_, err := s.decrypt(buf[:0], toDecrypt)
+		_, err := s.decrypt(buf[:0], buf[:nextMsgLen])
 		if err != nil {
 			return 0, err
 		}
@@ -130,16 +112,14 @@ func (s *secureSession) Write(data []byte) (int, error) {
 			end = total
 		}
 
-		b, err := s.encrypt(cbuf[:0], data[written:end])
+		b, err := s.encrypt(cbuf[:LengthPrefixLength], data[written:end])
 		if err != nil {
 			return 0, err
 		}
 
-		copy(cbuf[LengthPrefixLength:], b)
+		binary.BigEndian.PutUint16(cbuf, uint16(len(b)-LengthPrefixLength))
 
-		binary.BigEndian.PutUint16(cbuf, uint16(len(b)))
-
-		_, err = s.writeMsgInsecure(cbuf[0 : len(b)+LengthPrefixLength])
+		_, err = s.writeMsgInsecure(cbuf[0:len(b)])
 		if err != nil {
 			return written, err
 		}

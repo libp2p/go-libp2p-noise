@@ -18,7 +18,6 @@ type testMode int
 
 const (
 	readBufferGtEncMsg testMode = iota
-	readBufferGtPlainText
 	readBufferLtPlainText
 )
 
@@ -27,9 +26,6 @@ var bcs = map[string]struct {
 }{
 	"readBuffer > encrypted message": {
 		readBufferGtEncMsg,
-	},
-	"readBuffer > decrypted plaintext": {
-		readBufferGtPlainText,
 	},
 	"readBuffer < decrypted plaintext": {
 		readBufferLtPlainText,
@@ -178,8 +174,6 @@ func benchDataTransfer(b *benchenv, dataSize int64, m testMode) {
 		switch m {
 		case readBufferGtEncMsg:
 			rbuf = make([]byte, len(plainTextBufs[i])+poly1305.TagSize+1)
-		case readBufferGtPlainText:
-			rbuf = make([]byte, len(plainTextBufs[i])+1)
 		case readBufferLtPlainText:
 			rbuf = make([]byte, len(plainTextBufs[i])-2)
 		}
