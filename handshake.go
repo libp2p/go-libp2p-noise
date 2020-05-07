@@ -150,9 +150,9 @@ func (s *secureSession) sendHandshakeMessage(hs *noise.HandshakeState, payload [
 
 	// bz will also include the length prefix as we passed a slice of LengthPrefixLength length
 	// to hs.Write().
-	binary.BigEndian.PutUint16(hbuf, uint16(len(bz)-LengthPrefixLength))
+	binary.BigEndian.PutUint16(bz, uint16(len(bz)-LengthPrefixLength))
 
-	_, err = s.writeMsgInsecure(hbuf[:len(bz)])
+	_, err = s.writeMsgInsecure(bz)
 	if err != nil {
 		return err
 	}

@@ -2,10 +2,11 @@ package noise
 
 import (
 	"encoding/binary"
-	"golang.org/x/crypto/poly1305"
 	"io"
 
 	pool "github.com/libp2p/go-buffer-pool"
+
+	"golang.org/x/crypto/poly1305"
 )
 
 // MaxTransportMsgLength is the Noise-imposed maximum transport message length,
@@ -61,12 +62,12 @@ func (s *secureSession) Read(buf []byte) (int, error) {
 			return 0, err
 		}
 
-		_, err := s.decrypt(buf[:0], buf[:nextMsgLen])
+		dbuf, err := s.decrypt(buf[:0], buf[:nextMsgLen])
 		if err != nil {
 			return 0, err
 		}
 
-		return nextMsgLen - poly1305.TagSize, nil
+		return len(dbuf), nil
 	}
 
 	// otherwise, we get a buffer from the pool so we can read the message into it
@@ -117,9 +118,9 @@ func (s *secureSession) Write(data []byte) (int, error) {
 			return 0, err
 		}
 
-		binary.BigEndian.PutUint16(cbuf, uint16(len(b)-LengthPrefixLength))
+		binary.BigEndian.PutUint16(b, uint16(len(b)-LengthPrefixLength))
 
-		_, err = s.writeMsgInsecure(cbuf[0:len(b)])
+		_, err = s.writeMsgInsecure(b)
 		if err != nil {
 			return written, err
 		}
