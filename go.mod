@@ -9,5 +9,6 @@ require (
 	github.com/libp2p/go-libp2p v0.8.1
 	github.com/libp2p/go-libp2p-core v0.5.1
 	github.com/multiformats/go-multiaddr v0.2.1
+	github.com/stretchr/testify v1.5.1
 	golang.org/x/crypto v0.0.0-20200423211502-4bdfaf469ed5
 )

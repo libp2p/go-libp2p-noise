@@ -3,7 +3,10 @@ package noise
 import (
 	"context"
 	"crypto/rand"
+	"encoding/binary"
 	"fmt"
+	pool "github.com/libp2p/go-buffer-pool"
+	"golang.org/x/crypto/poly1305"
 	"time"
 
 	"github.com/flynn/noise"
@@ -54,15 +57,21 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 			// schedule the deadline removal once we're done handshaking.
 			defer s.SetDeadline(time.Time{})
 		}
-		// TODO: else case (transport doesn't support native timeouts); spin off
-		//  a goroutine to monitor the context cancellation and pull the rug
-		//  from under by closing the connection altogether.
 	}
+
+	// We can re-use this buffer for all handshake messages as it's size
+	// will be the size of the maximum handshake message for the Noise XX pattern.
+	// Also, since we prefix every noise handshake message with it's length, we need to account for
+	// it when we fetch the buffer from the pool
+	maxMsgSize := 2*noise.DH25519.DHLen() + len(payload) + 2*poly1305.TagSize
+	hbuf := pool.Get(maxMsgSize + LengthPrefixLength)
+	defer pool.Put(hbuf)
 
 	if s.initiator {
 		// stage 0 //
 		// do not send the payload just yet, as it would be plaintext; not secret.
-		err = s.sendHandshakeMessage(hs, nil)
+		// Handshake Msg Len = len(DH ephemeral key)
+		err = s.sendHandshakeMessage(hs, nil, hbuf)
 		if err != nil {
 			return fmt.Errorf("error sending handshake message: %w", err)
 		}
@@ -78,7 +87,8 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 		}
 
 		// stage 2 //
-		err = s.sendHandshakeMessage(hs, payload)
+		// Handshake Msg Len = len(DHT static key) +  MAC(static key is encrypted) + len(Payload) + MAC(payload is encrypted)
+		err = s.sendHandshakeMessage(hs, payload, hbuf)
 		if err != nil {
 			return fmt.Errorf("error sending handshake message: %w", err)
 		}
@@ -90,7 +100,9 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 		}
 
 		// stage 1 //
-		err = s.sendHandshakeMessage(hs, payload)
+		// Handshake Msg Len = len(DH ephemeral key) + len(DHT static key) +  MAC(static key is encrypted) + len(Payload) +
+		//MAC(payload is encrypted)
+		err = s.sendHandshakeMessage(hs, payload, hbuf)
 		if err != nil {
 			return fmt.Errorf("error sending handshake message: %w", err)
 		}
@@ -129,13 +141,18 @@ func (s *secureSession) setCipherStates(cs1, cs2 *noise.CipherState) {
 // If payload is non-empty, it will be included in the handshake message.
 // If this is the final message in the sequence, calls setCipherStates
 // to initialize cipher states.
-func (s *secureSession) sendHandshakeMessage(hs *noise.HandshakeState, payload []byte) error {
-	buf, cs1, cs2, err := hs.WriteMessage(nil, payload)
+func (s *secureSession) sendHandshakeMessage(hs *noise.HandshakeState, payload []byte, hbuf []byte) error {
+	// the first two bytes will be the length of the noise handshake message.
+	bz, cs1, cs2, err := hs.WriteMessage(hbuf[:LengthPrefixLength], payload)
 	if err != nil {
 		return err
 	}
 
-	_, err = s.writeMsgInsecure(buf)
+	// bz will also include the length prefix as we passed a slice of LengthPrefixLength length
+	// to hs.Write().
+	binary.BigEndian.PutUint16(bz, uint16(len(bz)-LengthPrefixLength))
+
+	_, err = s.writeMsgInsecure(bz)
 	if err != nil {
 		return err
 	}
@@ -154,11 +171,19 @@ func (s *secureSession) sendHandshakeMessage(hs *noise.HandshakeState, payload [
 // If this is the final message in the sequence, it calls setCipherStates
 // to initialize cipher states.
 func (s *secureSession) readHandshakeMessage(hs *noise.HandshakeState) ([]byte, error) {
-	raw, err := s.readMsgInsecure()
+	l, err := s.readNextInsecureMsgLen()
 	if err != nil {
 		return nil, err
 	}
-	msg, cs1, cs2, err := hs.ReadMessage(nil, raw)
+
+	buf := pool.Get(l)
+	defer pool.Put(buf)
+
+	if err := s.readNextMsgInsecure(buf); err != nil {
+		return nil, err
+	}
+
+	msg, cs1, cs2, err := hs.ReadMessage(nil, buf)
 	if err != nil {
 		return nil, err
 	}

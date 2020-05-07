@@ -128,7 +128,6 @@ func TestLibp2pIntegration(t *testing.T) {
 	}
 
 	<-doneCh
-	fmt.Println("fin")
 }
 
 func writeRandomPayloadAndClose(t *testing.T, stream net.Stream) error {

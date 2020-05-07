@@ -2,15 +2,35 @@ package noise
 
 import (
 	"context"
-	"github.com/libp2p/go-libp2p-core/crypto"
-	"github.com/libp2p/go-libp2p-core/sec"
+	"golang.org/x/crypto/poly1305"
 	"io"
 	"io/ioutil"
 	"math/rand"
 	"net"
 	"testing"
 	"time"
+
+	"github.com/libp2p/go-libp2p-core/crypto"
+	"github.com/libp2p/go-libp2p-core/sec"
 )
+
+type testMode int
+
+const (
+	readBufferGtEncMsg testMode = iota
+	readBufferLtPlainText
+)
+
+var bcs = map[string]struct {
+	m testMode
+}{
+	"readBuffer > encrypted message": {
+		readBufferGtEncMsg,
+	},
+	"readBuffer < decrypted plaintext": {
+		readBufferLtPlainText,
+	},
+}
 
 func makeTransport(b *testing.B) *Transport {
 	b.Helper()
@@ -78,28 +98,48 @@ func (b benchenv) connect(stopTimer bool) (*secureSession, *secureSession) {
 	return initSession.(*secureSession), respSession.(*secureSession)
 }
 
-func drain(r io.Reader, done chan<- error) {
-	_, err := io.Copy(ioutil.Discard, r)
+func drain(r io.Reader, done chan<- error, writeTo io.Writer) {
+	_, err := io.Copy(writeTo, r)
 	done <- err
 }
 
-func sink(dst io.WriteCloser, src io.Reader, done chan<- error) {
-	_, err := io.Copy(dst, src)
+type discardWithBuffer struct {
+	buf []byte
+	io.Writer
+}
+
+func (d *discardWithBuffer) ReadFrom(r io.Reader) (n int64, err error) {
+	readSize := 0
+	for {
+		readSize, err = r.Read(d.buf)
+		n += int64(readSize)
+		if err != nil {
+			if err == io.EOF {
+				return n, nil
+			}
+			return
+		}
+	}
+}
+
+func sink(dst io.WriteCloser, src io.Reader, done chan<- error, buf []byte) {
+	_, err := io.CopyBuffer(dst, src, buf)
 	if err != nil {
 		done <- err
 	}
 	done <- dst.Close()
 }
 
-func pipeRandom(src rand.Source, w io.WriteCloser, r io.Reader, n int64) error {
+func pipeRandom(src rand.Source, w io.WriteCloser, r io.Reader, n int64, plainTextBuf []byte,
+	writeTo io.Writer) error {
 	rnd := rand.New(src)
 	lr := io.LimitReader(rnd, n)
 
 	writeCh := make(chan error, 1)
 	readCh := make(chan error, 1)
 
-	go sink(w, lr, writeCh)
-	go drain(r, readCh)
+	go sink(w, lr, writeCh, plainTextBuf)
+	go drain(r, readCh, writeTo)
 
 	writeDone := false
 	readDone := false
@@ -121,9 +161,24 @@ func pipeRandom(src rand.Source, w io.WriteCloser, r io.Reader, n int64) error {
 	return nil
 }
 
-func benchDataTransfer(b *benchenv, size int64) {
+func benchDataTransfer(b *benchenv, dataSize int64, m testMode) {
 	var totalBytes int64
 	var totalTime time.Duration
+
+	plainTextBufs := make([][]byte, 61)
+	writeTos := make(map[int]io.Writer)
+	for i := 0; i < len(plainTextBufs); i++ {
+		var rbuf []byte
+		// plaintext will be 2 KB to 62 KB
+		plainTextBufs[i] = make([]byte, (i+2)*1024)
+		switch m {
+		case readBufferGtEncMsg:
+			rbuf = make([]byte, len(plainTextBufs[i])+poly1305.TagSize+1)
+		case readBufferLtPlainText:
+			rbuf = make([]byte, len(plainTextBufs[i])-2)
+		}
+		writeTos[i] = &discardWithBuffer{rbuf, ioutil.Discard}
+	}
 
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -132,28 +187,48 @@ func benchDataTransfer(b *benchenv, size int64) {
 		initSession, respSession := b.connect(true)
 
 		start := time.Now()
-		err := pipeRandom(b.rndSrc, initSession, respSession, size)
+
+		bufi := i % len(plainTextBufs)
+		err := pipeRandom(b.rndSrc, initSession, respSession, dataSize, plainTextBufs[bufi], writeTos[bufi])
 		if err != nil {
 			b.Fatalf("error sending random data: %s", err)
 		}
 		elapsed := time.Since(start)
 		totalTime += elapsed
-		totalBytes += size
+		totalBytes += dataSize
 	}
 	bytesPerSec := float64(totalBytes) / totalTime.Seconds()
 	b.ReportMetric(bytesPerSec, "bytes/sec")
 }
 
+type bc struct {
+	plainTextChunkLen int64
+	readBufferLen     int64
+}
+
 func BenchmarkTransfer1MB(b *testing.B) {
-	benchDataTransfer(setupEnv(b), 1024*1024)
+	for n, bc := range bcs {
+		b.Run(n, func(b *testing.B) {
+			benchDataTransfer(setupEnv(b), 1024*1024, bc.m)
+		})
+	}
+
 }
 
 func BenchmarkTransfer100MB(b *testing.B) {
-	benchDataTransfer(setupEnv(b), 1024*1024*100)
+	for n, bc := range bcs {
+		b.Run(n, func(b *testing.B) {
+			benchDataTransfer(setupEnv(b), 1024*1024*100, bc.m)
+		})
+	}
 }
 
 func BenchmarkTransfer500Mb(b *testing.B) {
-	benchDataTransfer(setupEnv(b), 1024*1024*500)
+	for n, bc := range bcs {
+		b.Run(n, func(b *testing.B) {
+			benchDataTransfer(setupEnv(b), 1024*1024*500, bc.m)
+		})
+	}
 }
 
 func (b benchenv) benchHandshake() {
