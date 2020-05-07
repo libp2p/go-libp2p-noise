@@ -3,6 +3,7 @@ package noise
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 	"golang.org/x/crypto/poly1305"
 	"io"
@@ -282,4 +283,48 @@ func TestBufferEqDecryptedPayload(t *testing.T) {
 
 	require.Equal(t, len(before), afterLen)
 	require.Equal(t, before, after[:len(before)])
+}
+
+func TestReadUnencryptedFails(t *testing.T) {
+	// case1 buffer > len(msg)
+	initTransport := newTestTransport(t, crypto.Ed25519, 2048)
+	respTransport := newTestTransport(t, crypto.Ed25519, 2048)
+
+	initConn, respConn := connect(t, initTransport, respTransport)
+	defer initConn.Close()
+	defer respConn.Close()
+
+	before := []byte("hello world")
+	msg := make([]byte, len(before)+LengthPrefixLength)
+	binary.BigEndian.PutUint16(msg, uint16(len(before)))
+	copy(msg[LengthPrefixLength:], before)
+	n, err := initConn.insecure.Write(msg)
+	require.NoError(t, err)
+	require.Equal(t, len(msg), n)
+
+	after := make([]byte, len(msg)+1)
+	afterLen, err := respConn.Read(after)
+	require.Error(t, err)
+	require.Equal(t, 0, afterLen)
+
+	// case2: buffer < len(msg)
+	initTransport = newTestTransport(t, crypto.Ed25519, 2048)
+	respTransport = newTestTransport(t, crypto.Ed25519, 2048)
+
+	initConn, respConn = connect(t, initTransport, respTransport)
+	defer initConn.Close()
+	defer respConn.Close()
+
+	before = []byte("hello world")
+	msg = make([]byte, len(before)+LengthPrefixLength)
+	binary.BigEndian.PutUint16(msg, uint16(len(before)))
+	copy(msg[LengthPrefixLength:], before)
+	n, err = initConn.insecure.Write(msg)
+	require.NoError(t, err)
+	require.Equal(t, len(msg), n)
+
+	after = make([]byte, 1)
+	afterLen, err = respConn.Read(after)
+	require.Error(t, err)
+	require.Equal(t, 0, afterLen)
 }
