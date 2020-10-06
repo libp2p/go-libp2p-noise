@@ -298,7 +298,7 @@ func TestReadUnencryptedFails(t *testing.T) {
 	msg := make([]byte, len(before)+LengthPrefixLength)
 	binary.BigEndian.PutUint16(msg, uint16(len(before)))
 	copy(msg[LengthPrefixLength:], before)
-	n, err := initConn.insecure.Write(msg)
+	n, err := initConn.insecureConn.Write(msg)
 	require.NoError(t, err)
 	require.Equal(t, len(msg), n)
 
@@ -319,7 +319,7 @@ func TestReadUnencryptedFails(t *testing.T) {
 	msg = make([]byte, len(before)+LengthPrefixLength)
 	binary.BigEndian.PutUint16(msg, uint16(len(before)))
 	copy(msg[LengthPrefixLength:], before)
-	n, err = initConn.insecure.Write(msg)
+	n, err = initConn.insecureConn.Write(msg)
 	require.NoError(t, err)
 	require.Equal(t, len(msg), n)
 
