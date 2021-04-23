@@ -2,13 +2,14 @@ package noise
 
 import (
 	"context"
-	"golang.org/x/crypto/poly1305"
 	"io"
 	"io/ioutil"
 	"math/rand"
 	"net"
 	"testing"
 	"time"
+
+	"golang.org/x/crypto/poly1305"
 
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/sec"
@@ -199,11 +200,6 @@ func benchDataTransfer(b *benchenv, dataSize int64, m testMode) {
 	}
 	bytesPerSec := float64(totalBytes) / totalTime.Seconds()
 	b.ReportMetric(bytesPerSec, "bytes/sec")
-}
-
-type bc struct {
-	plainTextChunkLen int64
-	readBufferLen     int64
 }
 
 func BenchmarkTransfer1MB(b *testing.B) {
