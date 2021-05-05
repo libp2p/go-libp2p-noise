@@ -95,6 +95,7 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 		}
 	} else {
 		// stage 0 //
+		// We don't expect any payload on the first message.
 		if _, err := s.readHandshakeMessage(hs); err != nil {
 			return fmt.Errorf("error reading handshake message: %w", err)
 		}
