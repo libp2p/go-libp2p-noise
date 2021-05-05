@@ -3,7 +3,7 @@ module github.com/libp2p/go-libp2p-noise
 go 1.14
 
 require (
-	github.com/flynn/noise v0.0.0-20180327030543-2492fe189ae6
+	github.com/flynn/noise v1.0.0
 	github.com/gogo/protobuf v1.3.2
 	github.com/libp2p/go-buffer-pool v0.0.2
 	github.com/libp2p/go-libp2p v0.8.1
