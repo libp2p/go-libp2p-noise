@@ -199,7 +199,7 @@ func (s *secureSession) readHandshakeMessage(hs *noise.HandshakeState) ([]byte, 
 func (s *secureSession) generateHandshakePayload(localStatic noise.DHKey) ([]byte, error) {
 	// obtain the public key from the handshake session so we can sign it with
 	// our libp2p secret key.
-	localKeyRaw, err := s.LocalPublicKey().Bytes()
+	localKeyRaw, err := crypto.MarshalPublicKey(s.LocalPublicKey())
 	if err != nil {
 		return nil, fmt.Errorf("error serializing libp2p identity key: %w", err)
 	}
