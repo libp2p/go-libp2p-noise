@@ -85,7 +85,7 @@ func (b benchenv) connect(stopTimer bool) (*secureSession, *secureSession) {
 		initSession, initErr = b.initTpt.SecureOutbound(context.TODO(), initConn, b.respTpt.localID)
 	}()
 
-	respSession, respErr := b.respTpt.SecureInbound(context.TODO(), respConn)
+	respSession, respErr := b.respTpt.SecureInbound(context.TODO(), respConn, "")
 	<-done
 
 	if initErr != nil {
