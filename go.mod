@@ -7,7 +7,7 @@ require (
 	github.com/flynn/noise v1.0.0
 	github.com/gogo/protobuf v1.3.2
 	github.com/libp2p/go-buffer-pool v0.0.2
-	github.com/libp2p/go-libp2p-core v0.9.0
+	github.com/libp2p/go-libp2p-core v0.10.0
 	github.com/multiformats/go-multiaddr v0.3.3 // indirect
 	github.com/multiformats/go-multihash v0.0.15 // indirect
 	github.com/stretchr/testify v1.7.0

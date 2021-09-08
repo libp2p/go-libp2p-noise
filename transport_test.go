@@ -5,14 +5,17 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
-	"golang.org/x/crypto/poly1305"
 	"io"
 	"math/rand"
 	"net"
 	"testing"
 	"time"
 
-	crypto "github.com/libp2p/go-libp2p-core/crypto"
+	"github.com/stretchr/testify/assert"
+
+	"golang.org/x/crypto/poly1305"
+
+	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/sec"
 
@@ -79,7 +82,7 @@ func connect(t *testing.T, initTransport, respTransport *Transport) (*secureSess
 		initConn, initErr = initTransport.SecureOutbound(context.TODO(), init, respTransport.localID)
 	}()
 
-	respConn, respErr := respTransport.SecureInbound(context.TODO(), resp)
+	respConn, respErr := respTransport.SecureInbound(context.TODO(), resp, "")
 	<-done
 
 	if initErr != nil {
@@ -161,24 +164,66 @@ func TestKeys(t *testing.T) {
 	}
 }
 
-func TestPeerIDMismatchFailsHandshake(t *testing.T) {
+func TestPeerIDMatch(t *testing.T) {
 	initTransport := newTestTransport(t, crypto.Ed25519, 2048)
 	respTransport := newTestTransport(t, crypto.Ed25519, 2048)
 	init, resp := newConnPair(t)
 
-	var initErr error
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		_, initErr = initTransport.SecureOutbound(context.TODO(), init, "a-random-peer-id")
+		conn, err := initTransport.SecureOutbound(context.TODO(), init, respTransport.localID)
+		assert.NoError(t, err)
+		assert.Equal(t, conn.RemotePeer(), respTransport.localID)
+		b := make([]byte, 6)
+		_, err = conn.Read(b)
+		assert.NoError(t, err)
+		assert.Equal(t, b, []byte("foobar"))
 	}()
 
-	_, _ = respTransport.SecureInbound(context.TODO(), resp)
-	<-done
+	conn, err := respTransport.SecureInbound(context.TODO(), resp, initTransport.localID)
+	require.NoError(t, err)
+	require.Equal(t, conn.RemotePeer(), initTransport.localID)
+	_, err = conn.Write([]byte("foobar"))
+	require.NoError(t, err)
+}
 
-	if initErr == nil {
-		t.Fatal("expected initiator to fail with peer ID mismatch error")
-	}
+func TestPeerIDMismatchOutboundFailsHandshake(t *testing.T) {
+	initTransport := newTestTransport(t, crypto.Ed25519, 2048)
+	respTransport := newTestTransport(t, crypto.Ed25519, 2048)
+	init, resp := newConnPair(t)
+
+	errChan := make(chan error)
+	go func() {
+		_, err := initTransport.SecureOutbound(context.TODO(), init, "a-random-peer-id")
+		errChan <- err
+	}()
+
+	_, err := respTransport.SecureInbound(context.TODO(), resp, "")
+	require.Error(t, err)
+
+	initErr := <-errChan
+	require.Error(t, initErr, "expected initiator to fail with peer ID mismatch error")
+	require.Contains(t, initErr.Error(), "but remote key matches")
+}
+
+func TestPeerIDMismatchInboundFailsHandshake(t *testing.T) {
+	initTransport := newTestTransport(t, crypto.Ed25519, 2048)
+	respTransport := newTestTransport(t, crypto.Ed25519, 2048)
+	init, resp := newConnPair(t)
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		conn, err := initTransport.SecureOutbound(context.TODO(), init, respTransport.localID)
+		assert.NoError(t, err)
+		_, err = conn.Read([]byte{0})
+		assert.Error(t, err)
+	}()
+
+	_, err := respTransport.SecureInbound(context.TODO(), resp, "a-random-peer-id")
+	require.Error(t, err, "expected responder to fail with peer ID mismatch error")
+	<-done
 }
 
 func makeLargePlaintext(size int) []byte {
