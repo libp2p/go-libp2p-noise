@@ -7,6 +7,8 @@ import (
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/sec"
+
+	ma "github.com/multiformats/go-multiaddr"
 )
 
 // ID is the protocol ID for noise
@@ -21,6 +23,8 @@ type Transport struct {
 	privateKey crypto.PrivKey
 }
 
+var _ sec.SecureTransport = &Transport{}
+
 // New creates a new Noise transport using the given private key as its
 // libp2p identity key.
 func New(privkey crypto.PrivKey) (*Transport, error) {
@@ -33,6 +37,12 @@ func New(privkey crypto.PrivKey) (*Transport, error) {
 		localID:    localID,
 		privateKey: privkey,
 	}, nil
+}
+
+var protoNoise = ma.ProtocolWithCode(ma.P_NOISE)
+
+func (t *Transport) Protocol() ma.Protocol {
+	return protoNoise
 }
 
 // SecureInbound runs the Noise handshake as the responder.
