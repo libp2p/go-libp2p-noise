@@ -11,30 +11,22 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-
 	"golang.org/x/crypto/poly1305"
 
 	"github.com/libp2p/go-libp2p-core/crypto"
-	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/sec"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func newTestTransport(t *testing.T, typ, bits int) *Transport {
-	priv, pub, err := crypto.GenerateKeyPair(typ, bits)
-	if err != nil {
-		t.Fatal(err)
-	}
-	id, err := peer.IDFromPublicKey(pub)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return &Transport{
-		localID:    id,
-		privateKey: priv,
-	}
+func newTestTransport(t *testing.T, typ, bits int, opts ...Option) *Transport {
+	t.Helper()
+	priv, _, err := crypto.GenerateKeyPair(typ, bits)
+	require.NoError(t, err)
+	tr, err := New(priv, opts...)
+	require.NoError(t, err)
+	return tr
 }
 
 // Create a new pair of connected TCP sockets.
@@ -85,14 +77,27 @@ func connect(t *testing.T, initTransport, respTransport *Transport) (*secureSess
 	respConn, respErr := respTransport.SecureInbound(context.TODO(), resp, "")
 	<-done
 
-	if initErr != nil {
-		t.Fatal(initErr)
-	}
+	require.NoError(t, initErr)
+	require.NoError(t, respErr)
+	return initConn.(*secureSession), respConn.(*secureSession)
+}
 
-	if respErr != nil {
-		t.Fatal(respErr)
-	}
+func connectWithEarlyData(t *testing.T, initTransport, respTransport *Transport, earlyData []byte) (*secureSession, *secureSession) {
+	init, resp := newConnPair(t)
 
+	var initConn sec.SecureConn
+	var initErr error
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		initConn, initErr = initTransport.SecureOutboundWithEarlyData(context.TODO(), init, respTransport.localID, earlyData)
+	}()
+
+	respConn, respErr := respTransport.SecureInbound(context.TODO(), resp, "")
+	<-done
+
+	require.NoError(t, initErr)
+	require.NoError(t, respErr)
 	return initConn.(*secureSession), respConn.(*secureSession)
 }
 
@@ -372,4 +377,18 @@ func TestReadUnencryptedFails(t *testing.T) {
 	afterLen, err = respConn.Read(after)
 	require.Error(t, err)
 	require.Equal(t, 0, afterLen)
+}
+
+func TestEarlyData(t *testing.T) {
+	initTransport := newTestTransport(t, crypto.Ed25519, 2048)
+	earlyDataChan := make(chan []byte, 1)
+	respTransport := newTestTransport(t, crypto.Ed25519, 2048, WithEarlyDataHandler(func(b []byte) error {
+		earlyDataChan <- b
+		return nil
+	}))
+
+	initConn, respConn := connectWithEarlyData(t, initTransport, respTransport, []byte("foobar"))
+	defer initConn.Close()
+	defer respConn.Close()
+	require.Equal(t, []byte("foobar"), <-earlyDataChan)
 }

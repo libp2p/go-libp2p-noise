@@ -28,6 +28,9 @@ type secureSession struct {
 	insecureReader *bufio.Reader // to cushion io read syscalls
 	// we don't buffer writes to avoid introducing latency; optimisation possible. // TODO revisit
 
+	earlyData        []byte
+	earlyDataHandler func([]byte) error
+
 	qseek int     // queued bytes seek value.
 	qbuf  []byte  // queued bytes buffer.
 	rlen  [2]byte // work buffer to read in the incoming message length.
@@ -38,14 +41,16 @@ type secureSession struct {
 
 // newSecureSession creates a Noise session over the given insecureConn Conn, using
 // the libp2p identity keypair from the given Transport.
-func newSecureSession(tpt *Transport, ctx context.Context, insecure net.Conn, remote peer.ID, initiator bool) (*secureSession, error) {
+func newSecureSession(tpt *Transport, ctx context.Context, insecure net.Conn, remote peer.ID, initiator bool, earlyData []byte) (*secureSession, error) {
 	s := &secureSession{
-		insecureConn:   insecure,
-		insecureReader: bufio.NewReader(insecure),
-		initiator:      initiator,
-		localID:        tpt.localID,
-		localKey:       tpt.privateKey,
-		remoteID:       remote,
+		insecureConn:     insecure,
+		insecureReader:   bufio.NewReader(insecure),
+		initiator:        initiator,
+		localID:          tpt.localID,
+		localKey:         tpt.privateKey,
+		remoteID:         remote,
+		earlyData:        earlyData,
+		earlyDataHandler: tpt.earlyDataHandler,
 	}
 
 	// the go-routine we create to run the handshake will

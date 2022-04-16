@@ -70,10 +70,8 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 
 	if s.initiator {
 		// stage 0 //
-		// do not send the payload just yet, as it would be plaintext; not secret.
 		// Handshake Msg Len = len(DH ephemeral key)
-		err = s.sendHandshakeMessage(hs, nil, hbuf)
-		if err != nil {
+		if err := s.sendHandshakeMessage(hs, s.earlyData, hbuf); err != nil {
 			return fmt.Errorf("error sending handshake message: %w", err)
 		}
 
@@ -82,44 +80,45 @@ func (s *secureSession) runHandshake(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("error reading handshake message: %w", err)
 		}
-		err = s.handleRemoteHandshakePayload(plaintext, hs.PeerStatic())
-		if err != nil {
+		if err := s.handleRemoteHandshakePayload(plaintext, hs.PeerStatic()); err != nil {
 			return err
 		}
 
 		// stage 2 //
 		// Handshake Msg Len = len(DHT static key) +  MAC(static key is encrypted) + len(Payload) + MAC(payload is encrypted)
-		err = s.sendHandshakeMessage(hs, payload, hbuf)
-		if err != nil {
+		if err := s.sendHandshakeMessage(hs, payload, hbuf); err != nil {
 			return fmt.Errorf("error sending handshake message: %w", err)
 		}
-	} else {
-		// stage 0 //
-		// We don't expect any payload on the first message.
-		if _, err := s.readHandshakeMessage(hs); err != nil {
-			return fmt.Errorf("error reading handshake message: %w", err)
-		}
-
-		// stage 1 //
-		// Handshake Msg Len = len(DH ephemeral key) + len(DHT static key) +  MAC(static key is encrypted) + len(Payload) +
-		//MAC(payload is encrypted)
-		err = s.sendHandshakeMessage(hs, payload, hbuf)
-		if err != nil {
-			return fmt.Errorf("error sending handshake message: %w", err)
-		}
-
-		// stage 2 //
-		plaintext, err := s.readHandshakeMessage(hs)
-		if err != nil {
-			return fmt.Errorf("error reading handshake message: %w", err)
-		}
-		err = s.handleRemoteHandshakePayload(plaintext, hs.PeerStatic())
-		if err != nil {
-			return err
-		}
+		return nil
 	}
 
-	return nil
+	// stage 0 //
+	// We don't expect any payload on the first message.
+	initialPayload, err := s.readHandshakeMessage(hs)
+	if err != nil {
+		return fmt.Errorf("error reading handshake message: %w", err)
+	}
+	if s.earlyDataHandler != nil {
+		if err := s.earlyDataHandler(initialPayload); err != nil {
+			return err
+		}
+	} else if len(initialPayload) > 0 {
+		return fmt.Errorf("received unexpected early data (%d bytes)", len(initialPayload))
+	}
+
+	// stage 1 //
+	// Handshake Msg Len = len(DH ephemeral key) + len(DHT static key) +  MAC(static key is encrypted) + len(Payload) +
+	// MAC(payload is encrypted)
+	if err := s.sendHandshakeMessage(hs, payload, hbuf); err != nil {
+		return fmt.Errorf("error sending handshake message: %w", err)
+	}
+
+	// stage 2 //
+	plaintext, err := s.readHandshakeMessage(hs)
+	if err != nil {
+		return fmt.Errorf("error reading handshake message: %w", err)
+	}
+	return s.handleRemoteHandshakePayload(plaintext, hs.PeerStatic())
 }
 
 // setCipherStates sets the initial cipher states that will be used to protect
